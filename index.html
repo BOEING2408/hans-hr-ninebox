@@ -10,6 +10,8 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <!-- Supabase JS：云端共享数据 -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <!-- marked.js：Markdown 渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
     <style>
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
@@ -84,6 +86,72 @@
 
         /* 云端加载遮罩 */
         #cloud-loading { transition: opacity .3s; }
+        /* ── 整体盘点意见 Markdown 编辑器 ── */
+        .overall-editor-wrap { position: relative; }
+        .overall-tab-bar { display: flex; gap: 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 0; }
+        .overall-tab { padding: 6px 18px; font-size: 13px; font-weight: 500; cursor: pointer;
+            color: #6b7280; border: 1px solid transparent; border-bottom: none;
+            border-radius: 6px 6px 0 0; background: transparent; transition: all .15s; }
+        .overall-tab.active { color: #2563eb; background: #fff; border-color: #e5e7eb;
+            border-bottom-color: #fff; margin-bottom: -1px; }
+        .overall-tab:hover:not(.active) { color: #374151; background: #f9fafb; }
+        #overall-editor-textarea {
+            width: 100%; min-height: 200px; padding: 14px 16px;
+            background: #f8fafc; border: 1px solid #e5e7eb;
+            border-top: none; border-radius: 0 0 8px 8px;
+            font-size: 14px; line-height: 1.75; resize: vertical; outline: none;
+            font-family: Consolas, 'Courier New', 'PingFang SC', 'Microsoft YaHei', monospace;
+            color: #1e293b;
+        }
+        #overall-editor-textarea:focus { box-shadow: inset 0 0 0 2px #3b82f6; background: #fff; }
+        #overall-preview {
+            min-height: 200px; padding: 14px 16px;
+            background: #fff; border: 1px solid #e5e7eb;
+            border-top: none; border-radius: 0 0 8px 8px;
+            font-size: 14px; line-height: 1.75; color: #1e293b;
+            font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+        }
+        /* Markdown 预览内容样式 */
+        #overall-preview h1,#overall-preview h2,#overall-preview h3 {
+            font-weight: 700; margin: 1em 0 .4em; color: #111827; }
+        #overall-preview h1 { font-size: 1.25em; border-bottom: 2px solid #e5e7eb; padding-bottom: .3em; }
+        #overall-preview h2 { font-size: 1.1em; border-bottom: 1px solid #f3f4f6; padding-bottom: .2em; }
+        #overall-preview h3 { font-size: 1em; }
+        #overall-preview p { margin: .5em 0; }
+        #overall-preview ul,#overall-preview ol { padding-left: 1.6em; margin: .5em 0; }
+        #overall-preview li { margin: .2em 0; }
+        #overall-preview strong { font-weight: 700; }
+        #overall-preview em { font-style: italic; }
+        #overall-preview blockquote {
+            border-left: 3px solid #3b82f6; padding: .4em .8em;
+            background: #eff6ff; color: #374151; margin: .6em 0; border-radius: 0 6px 6px 0; }
+        #overall-preview code {
+            font-family: Consolas, 'Courier New', monospace;
+            background: #f1f5f9; padding: 1px 5px; border-radius: 4px;
+            font-size: .92em; color: #0f172a; }
+        #overall-preview pre {
+            background: #1e293b; color: #e2e8f0; padding: 12px 16px;
+            border-radius: 8px; overflow-x: auto; margin: .6em 0; }
+        #overall-preview pre code {
+            background: none; padding: 0; color: inherit; font-size: .9em; }
+        #overall-preview table {
+            border-collapse: collapse; width: 100%; margin: .6em 0; font-size: .92em; }
+        #overall-preview th,#overall-preview td {
+            border: 1px solid #e5e7eb; padding: 6px 12px; text-align: left; }
+        #overall-preview th { background: #f8fafc; font-weight: 600; }
+        #overall-preview a { color: #2563eb; text-decoration: underline; }
+        #overall-preview hr { border: none; border-top: 1px solid #e5e7eb; margin: .8em 0; }
+        /* 英文数字使用 Consolas，中文继承全局字体 */
+        #overall-preview * {
+            font-family: Consolas, 'Courier New', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+        }
+        #overall-preview p, #overall-preview li, #overall-preview td, #overall-preview th,
+        #overall-preview blockquote {
+            font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', Consolas, sans-serif;
+        }
+        #overall-preview code, #overall-preview pre {
+            font-family: Consolas, 'Courier New', monospace;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
@@ -145,14 +213,40 @@
 
         <!-- 整体盘点意见 -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-            <div class="flex items-center gap-2 mb-3">
-                <i class="fa-solid fa-file-lines text-blue-600"></i>
-                <h3 class="font-bold text-gray-800">模块整体盘点意见及后续行动计划</h3>
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-file-lines text-blue-600"></i>
+                    <h3 class="font-bold text-gray-800">模块整体盘点意见及后续行动计划</h3>
+                    <span class="text-xs text-gray-400 font-normal">（支持 Markdown 格式）</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-gray-400">
+                    <i class="fa-brands fa-markdown"></i>
+                    <span>Markdown</span>
+                </div>
             </div>
-            <textarea id="overall-comments"
-                class="w-full min-h-[72px] p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none resize-y"
-                placeholder="在此输入整体盘点总结..."
-                oninput="saveOverallComments()"></textarea>
+            <div class="overall-editor-wrap">
+                <div class="overall-tab-bar">
+                    <button class="overall-tab active" id="overall-tab-edit" onclick="switchOverallTab('edit')">
+                        <i class="fa-solid fa-pen-to-square mr-1"></i>编辑
+                    </button>
+                    <button class="overall-tab" id="overall-tab-preview" onclick="switchOverallTab('preview')">
+                        <i class="fa-solid fa-eye mr-1"></i>预览
+                    </button>
+                </div>
+                <textarea id="overall-editor-textarea"
+                    placeholder="在此输入整体盘点总结，支持 Markdown 格式...
+
+例如：
+## 整体评价
+本次盘点共 **12 名** 员工参与...
+
+## 后续行动计划
+1. A 类员工：给予挑战性任务
+2. B 类员工：认可稳定贡献
+- [ ] 2024-Q1 完成绩效面谈"
+                    oninput="saveOverallComments()"></textarea>
+                <div id="overall-preview" class="hidden"></div>
+            </div>
         </div>
 
         <!-- 人才矩阵 -->
@@ -587,7 +681,8 @@ async function cloudLoadAll() {
 
             // 整体评语
             if (stateMap['overall_comments']) {
-                document.getElementById('overall-comments').value = stateMap['overall_comments'];
+                const oc = document.getElementById('overall-editor-textarea');
+                if (oc) oc.value = stateMap['overall_comments'];
             }
             // 恢复人员基础表文件
             if (stateMap['file_personnel_b64']) {
@@ -1165,9 +1260,33 @@ function clearAllData() {
 function saveOverallComments() {
     clearTimeout(_cloudSaveTimer);
     _cloudSaveTimer = setTimeout(function() {
-        const val = document.getElementById('overall-comments').value;
+        const val = document.getElementById('overall-editor-textarea').value;
         cloudSaveState('overall_comments', val);
     }, 1500);
+}
+
+// 切换编辑/预览标签
+function switchOverallTab(tab) {
+    const textarea = document.getElementById('overall-editor-textarea');
+    const preview  = document.getElementById('overall-preview');
+    const tabEdit  = document.getElementById('overall-tab-edit');
+    const tabPrev  = document.getElementById('overall-tab-preview');
+    if (tab === 'edit') {
+        textarea.classList.remove('hidden');
+        preview.classList.add('hidden');
+        tabEdit.classList.add('active');
+        tabPrev.classList.remove('active');
+        textarea.focus();
+    } else {
+        const md = textarea.value || '';
+        preview.innerHTML = typeof marked !== 'undefined'
+            ? marked.parse(md)
+            : '<pre style="white-space:pre-wrap">' + md.replace(/</g,'&lt;') + '</pre>';
+        textarea.classList.add('hidden');
+        preview.classList.remove('hidden');
+        tabEdit.classList.remove('active');
+        tabPrev.classList.add('active');
+    }
 }
 
 // ─── 标签筛选 ──────────────────────────────────────────────────────
