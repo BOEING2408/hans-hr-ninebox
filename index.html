@@ -152,6 +152,64 @@
         #overall-preview code, #overall-preview pre {
             font-family: Consolas, 'Courier New', monospace;
         }
+        /* ── 人名搜索框 ── */
+        #matrix-search-wrap { position: relative; }
+        #matrix-search-input {
+            width: 100%; padding: 9px 16px 9px 38px;
+            border: 1.5px solid #e5e7eb; border-radius: 10px;
+            font-size: 14px; color: #1e293b; background: #f8fafc;
+            outline: none; transition: border-color .15s, box-shadow .15s;
+        }
+        #matrix-search-input:focus {
+            border-color: #3b82f6; background: #fff;
+            box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+        }
+        #matrix-search-icon {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            color: #9ca3af; font-size: 14px; pointer-events: none;
+        }
+        #matrix-search-results {
+            position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+            background: #fff; border: 1.5px solid #e5e7eb; border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,.10); z-index: 200;
+            max-height: 280px; overflow-y: auto;
+        }
+        .search-result-item {
+            display: flex; align-items: center;
+            padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f3f4f6;
+            transition: background .12s; gap: 8px;
+        }
+        .search-result-item:last-child { border-bottom: none; }
+        .search-result-item:hover { background: #eff6ff; }
+        .search-result-name { font-weight: 600; font-size: 14px; color: #1e293b; }
+        .search-result-meta { font-size: 12px; color: #6b7280; flex: 1; }
+        .search-result-cat {
+            font-size: 11px; font-weight: 700;
+            padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+        }
+        /* 矩阵格子高斯模糊 */
+        .matrix-cell-blur { filter: blur(3px); opacity: .4; transition: filter .25s, opacity .25s; pointer-events: none; }
+        .matrix-cell-highlight { transition: filter .25s, opacity .25s; }
+        /* 搜索详情侧边面板 */
+        #search-detail-panel {
+            position: fixed; top: 0; right: 0; bottom: 0; width: 420px;
+            background: #fff; box-shadow: -4px 0 32px rgba(0,0,0,.14);
+            z-index: 500; display: flex; flex-direction: column;
+            transform: translateX(100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
+        }
+        #search-detail-panel.open { transform: translateX(0); }
+        #search-detail-panel .panel-header {
+            padding: 18px 20px 14px; border-bottom: 1px solid #e5e7eb;
+            display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+        }
+        #search-detail-panel .panel-body { flex: 1; overflow-y: auto; padding: 20px; }
+        #search-panel-close {
+            width: 32px; height: 32px; border-radius: 8px; border: none;
+            background: #f3f4f6; cursor: pointer; font-size: 16px; color: #6b7280;
+            display: flex; align-items: center; justify-content: center;
+            transition: background .12s;
+        }
+        #search-panel-close:hover { background: #e5e7eb; color: #374151; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
@@ -251,9 +309,21 @@
 
         <!-- 人才矩阵 -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div class="p-4 border-b border-gray-200 bg-gray-50 flex items-center gap-2">
-                <i class="fa-solid fa-crosshairs text-blue-600"></i>
-                <h3 class="font-bold text-gray-800">人才盘点评价矩阵落位图</h3>
+            <div class="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-crosshairs text-blue-600"></i>
+                    <h3 class="font-bold text-gray-800">人才盘点评价矩阵落位图</h3>
+                </div>
+                <!-- 人名搜索框 -->
+                <div id="matrix-search-wrap" class="relative w-64">
+                    <i class="fa-solid fa-magnifying-glass" id="matrix-search-icon"></i>
+                    <input type="text" id="matrix-search-input"
+                        placeholder="搜索人名…"
+                        oninput="onMatrixSearch(this.value)"
+                        onblur="setTimeout(hideSearchResults,180)"
+                        autocomplete="off">
+                    <div id="matrix-search-results" class="hidden"></div>
+                </div>
             </div>
             <div class="overflow-x-auto p-4">
                 <div class="min-w-[900px] border border-gray-300 rounded-lg overflow-hidden">
@@ -1257,6 +1327,141 @@ function clearAllData() {
     });
 }
 
+// ─── 人名搜索 ──────────────────────────────────────────────────────
+let _searchHighlightCell = null;   // 当前高亮的格子 DOM
+
+function onMatrixSearch(val) {
+    const q = val.trim();
+    const box = document.getElementById('matrix-search-results');
+    if (!q) { box.classList.add('hidden'); clearMatrixHighlight(); return; }
+    const results = usersData.filter(function(u) {
+        return u.name && u.name.includes(q);
+    });
+    if (results.length === 0) {
+        box.innerHTML = '<div class="search-result-item text-gray-400 text-sm">未找到匹配人员</div>';
+        box.classList.remove('hidden');
+        return;
+    }
+    const CAT_COLORS = { A:'#92D050', B:'#FFFF00', C:'#FFC000', D:'#8EA9DB', E:'#FF0000' };
+    const CAT_TEXT   = { A:'#374151', B:'#374151', C:'#374151', D:'#374151', E:'#fff' };
+    box.innerHTML = results.map(function(u) {
+        const cat = u.categoryId || '—';
+        const bg  = CAT_COLORS[cat] || '#e5e7eb';
+        const tc  = CAT_TEXT[cat]   || '#374151';
+        return '<div class="search-result-item" onmousedown="selectSearchResult(\'' + u.id + '\')">'+
+            '<span class="search-result-name">' + escHtml(u.name) + '</span>' +
+            '<span class="search-result-meta">' + escHtml(u.jobFamily||'') + ' · ' + escHtml(u.position||'') + '</span>' +
+            '<span class="search-result-cat" style="background:' + bg + ';color:' + tc + '">' + cat + '类</span>' +
+            '</div>';
+    }).join('');
+    box.classList.remove('hidden');
+}
+
+function hideSearchResults() {
+    const box = document.getElementById('matrix-search-results');
+    if (box) box.classList.add('hidden');
+}
+
+function selectSearchResult(userId) {
+    hideSearchResults();
+    const user = usersData.find(function(u) { return u.id === userId; });
+    if (!user) return;
+
+    // 找到该员工所在格子（perf 行 × compId 列）
+    const perfId   = user.performance;
+    const compId   = user.compId;
+    const rowIdx   = MATRIX_ROWS.findIndex(function(r) { return r.id === perfId; });
+    const colIdx   = MATRIX_COLS.findIndex(function(c) { return c.id === compId; });
+
+    // 高亮目标格子，其余模糊
+    applyMatrixHighlight(rowIdx, colIdx);
+
+    // 将目标格子所在列滚动到视口左侧
+    scrollMatrixColIntoView(colIdx);
+
+    // 打开右侧详情面板
+    openSearchPanel(user);
+}
+
+function applyMatrixHighlight(targetRow, targetCol) {
+    clearMatrixHighlight();
+    const body = document.getElementById('matrix-body');
+    if (!body) return;
+    const rows = body.querySelectorAll(':scope > div');
+    rows.forEach(function(rowEl, ri) {
+        // 每行第0列是行标题，数据列从第1列开始
+        const cells = rowEl.querySelectorAll(':scope > div');
+        cells.forEach(function(cell, ci) {
+            if (ci === 0) return; // 跳过行标题
+            const dataColIdx = ci - 1;
+            if (ri === targetRow && dataColIdx === targetCol) {
+                cell.classList.add('matrix-cell-highlight');
+            } else {
+                cell.classList.add('matrix-cell-blur');
+            }
+        });
+    });
+}
+
+function clearMatrixHighlight() {
+    const body = document.getElementById('matrix-body');
+    if (!body) return;
+    body.querySelectorAll('.matrix-cell-blur, .matrix-cell-highlight').forEach(function(el) {
+        el.classList.remove('matrix-cell-blur', 'matrix-cell-highlight');
+    });
+}
+
+function scrollMatrixColIntoView(colIdx) {
+    // 矩阵有5列（含行标题列），数据列 colIdx 对应第 colIdx+1 列
+    const body = document.getElementById('matrix-body');
+    if (!body) return;
+    const firstRow = body.querySelector(':scope > div');
+    if (!firstRow) return;
+    const cells = firstRow.querySelectorAll(':scope > div');
+    const targetCell = cells[colIdx + 1]; // +1 跳过行标题
+    if (!targetCell) return;
+    const scrollContainer = document.querySelector('.overflow-x-auto');
+    if (!scrollContainer) return;
+    const containerLeft = scrollContainer.getBoundingClientRect().left;
+    const cellLeft = targetCell.getBoundingClientRect().left;
+    const offset = cellLeft - containerLeft + scrollContainer.scrollLeft - 8;
+    scrollContainer.scrollTo({ left: Math.max(0, offset), behavior: 'smooth' });
+}
+
+function openSearchPanel(user) {
+    const panel = document.getElementById('search-detail-panel');
+    document.getElementById('search-panel-name').textContent = user.name || '—';
+    document.getElementById('search-panel-meta').textContent =
+        (user.jobFamily || '') + (user.position ? ' · ' + user.position : '') +
+        '  |  绩效：' + (user.performance || '—') + '  |  能力：' + (user.compScore || '—') +
+        '  |  ' + (user.categoryId || '—') + '类';
+
+    // 复用 renderModalContent 的内容逻辑，但渲染到侧边面板
+    const body = document.getElementById('search-panel-body');
+    body.innerHTML = buildUserDetailHTML(user);
+    panel.classList.add('open');
+}
+
+function closeSearchPanel() {
+    document.getElementById('search-detail-panel').classList.remove('open');
+    clearMatrixHighlight();
+    const inp = document.getElementById('matrix-search-input');
+    if (inp) inp.value = '';
+}
+
+// 点击矩阵区域外（非面板）时清除高亮
+document.addEventListener('click', function(e) {
+    const panel = document.getElementById('search-detail-panel');
+    const searchWrap = document.getElementById('matrix-search-wrap');
+    const matrixEl = document.querySelector('.overflow-x-auto');
+    if (!panel || !searchWrap) return;
+    if (!panel.contains(e.target) && !searchWrap.contains(e.target)) {
+        if (panel.classList.contains('open')) {
+            closeSearchPanel();
+        }
+    }
+});
+
 function saveOverallComments() {
     clearTimeout(_cloudSaveTimer);
     _cloudSaveTimer = setTimeout(function() {
@@ -1490,6 +1695,80 @@ function openModal(userId) {
     document.getElementById('user-modal').classList.remove('hidden-tab');
 }
 
+// 构建员工详情 HTML（供搜索侧边面板复用）
+function buildUserDetailHTML(user) {
+    if (!user) return '';
+    const catDef = TALENT_CATEGORIES[user.categoryId] || TALENT_CATEGORIES['D'];
+    const CAT_BG = { A:'#92D050', B:'#FFFF00', C:'#FFC000', D:'#8EA9DB', E:'#FF0000' };
+    const CAT_TC = { A:'#374151', B:'#374151', C:'#374151', D:'#374151', E:'#fff' };
+    const catBg = CAT_BG[user.categoryId] || '#e5e7eb';
+    const catTc = CAT_TC[user.categoryId] || '#374151';
+
+    // 基本信息卡片
+    let html = '<div class="space-y-4">';
+    html += '<div class="flex gap-3">';
+    html += '<div class="flex-1 p-3 rounded-xl border bg-gray-50 border-gray-200 text-center">' +
+        '<div class="text-xs text-gray-500 mb-1">绩效</div>' +
+        '<div class="font-bold text-gray-800">' + escHtml(user.performance || '—') + '</div></div>';
+    html += '<div class="flex-1 p-3 rounded-xl border bg-gray-50 border-gray-200 text-center">' +
+        '<div class="text-xs text-gray-500 mb-1">能力得分</div>' +
+        '<div class="font-bold text-gray-800">' + escHtml(String(user.compScore || '—')) + '</div></div>';
+    html += '<div class="flex-1 p-3 rounded-xl border text-center ' + catDef.catBoxClass + '">' +
+        '<div class="text-xs mb-1" style="color:' + catTc + ';opacity:.7">人才分类</div>' +
+        '<div class="font-bold" style="color:' + catTc + '">' + escHtml(user.categoryId || '—') + '类</div></div>';
+    html += '</div>';
+
+    // 雷达图
+    html += '<div class="bg-gray-50 rounded-xl p-4">';
+    html += '<div class="text-xs font-semibold text-gray-500 mb-3">能力雷达图</div>';
+    html += '<div class="flex justify-center">' + generateSVGRadar(user.radarData) + '</div>';
+    html += '</div>';
+
+    // 维度明细
+    if (user.radarData && user.radarData.length > 0) {
+        html += '<div class="space-y-2">';
+        html += '<div class="text-xs font-semibold text-gray-500 mb-2">维度得分明细</div>';
+        user.radarData.forEach(function(item) {
+            const pct = Math.round(item.score / item.fullMark * 100);
+            const barColor = pct >= 80 ? '#22c55e' : (pct >= 60 ? '#3b82f6' : '#f97316');
+            html += '<div class="text-sm border-b border-gray-50 pb-2 last:border-0 last:pb-0">' +
+                '<div class="flex justify-between items-center mb-1">' +
+                '<span class="text-gray-700 font-medium">' + escHtml(item.subject) + '</span>' +
+                '<span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">' + item.score + ' / ' + item.fullMark + '</span>' +
+                '</div>' +
+                '<div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">' +
+                '<div class="h-full rounded-full transition-all" style="width:' + pct + '%;background:' + barColor + '"></div>' +
+                '</div></div>';
+        });
+        html += '</div>';
+    }
+
+    // 评语
+    html += '<div>';
+    html += '<div class="text-xs font-semibold text-gray-500 mb-2">主管评语与行动计划</div>';
+    html += '<textarea id="search-panel-comments" rows="5" ' +
+        'class="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none resize-y" ' +
+        'placeholder="在此输入评语…" ' +
+        'oninput="saveSearchPanelComments(\'' + user.id + '\')">' + escHtml(user.comments || '') + '</textarea>';
+    html += '</div>';
+
+    html += '</div>';
+    return html;
+}
+
+function saveSearchPanelComments(userId) {
+    clearTimeout(_cloudSaveTimer);
+    _cloudSaveTimer = setTimeout(function() {
+        const el = document.getElementById('search-panel-comments');
+        if (!el) return;
+        const idx = usersData.findIndex(function(u) { return u.id === userId; });
+        if (idx > -1 && usersData[idx].comments !== el.value) {
+            usersData[idx].comments = el.value;
+            cloudSaveUser(usersData[idx]);
+        }
+    }, 1500);
+}
+
 function renderModalContent(user) {
     if (!user) return;
     currentEditingUserId = user.id;
@@ -1643,5 +1922,18 @@ window.onload = async function() {
     subscribeRealtime();
 };
 </script>
+<!-- ===================== 搜索详情侧边面板 ===================== -->
+<div id="search-detail-panel">
+    <div class="panel-header">
+        <div>
+            <div class="font-bold text-gray-900 text-base" id="search-panel-name">—</div>
+            <div class="text-xs text-gray-500 mt-0.5" id="search-panel-meta">—</div>
+        </div>
+        <button id="search-panel-close" onclick="closeSearchPanel()">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+    <div class="panel-body" id="search-panel-body"></div>
+</div>
 </body>
 </html>
