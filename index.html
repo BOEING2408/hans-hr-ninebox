@@ -1428,7 +1428,9 @@ function scrollMatrixColIntoView(colIdx) {
     scrollContainer.scrollTo({ left: Math.max(0, offset), behavior: 'smooth' });
 }
 
+var _justOpenedSearchPanel = false;
 function openSearchPanel(user) {
+    _justOpenedSearchPanel = true;
     const panel = document.getElementById('search-detail-panel');
     document.getElementById('search-panel-name').textContent = user.name || '—';
     document.getElementById('search-panel-meta').textContent =
@@ -1451,9 +1453,13 @@ function closeSearchPanel() {
 
 // 点击矩阵区域外（非面板）时清除高亮
 document.addEventListener('click', function(e) {
+    // 刚刚通过 mousedown 打开面板，跳过本次 click 事件（避免立即关闭）
+    if (_justOpenedSearchPanel) {
+        _justOpenedSearchPanel = false;
+        return;
+    }
     const panel = document.getElementById('search-detail-panel');
     const searchWrap = document.getElementById('matrix-search-wrap');
-    const matrixEl = document.querySelector('.overflow-x-auto');
     if (!panel || !searchWrap) return;
     if (!panel.contains(e.target) && !searchWrap.contains(e.target)) {
         if (panel.classList.contains('open')) {
