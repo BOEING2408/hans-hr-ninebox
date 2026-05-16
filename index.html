@@ -45,6 +45,54 @@
             from { opacity: 0; transform: scale(.96) translateY(8px); }
             to   { opacity: 1; transform: scale(1) translateY(0); }
         }
+
+        /* ── 表格编辑器 ── */
+        .sheet-editor { overflow: auto; max-height: 420px; border: 1px solid #e5e7eb; border-radius: 10px; }
+        .sheet-table { border-collapse: collapse; min-width: 100%; font-size: 12px; }
+        .sheet-table th {
+            position: sticky; top: 0; z-index: 2;
+            background: #f8fafc; border: 1px solid #e2e8f0;
+            padding: 0; white-space: nowrap;
+        }
+        .sheet-table th .th-inner {
+            display: flex; align-items: center; gap: 4px;
+            padding: 6px 8px;
+        }
+        .sheet-table th input.th-input {
+            background: transparent; border: none; outline: none;
+            font-weight: 600; color: #374151; width: 100%; min-width: 60px;
+            font-size: 12px; cursor: text;
+        }
+        .sheet-table th input.th-input:focus { background: #eff6ff; border-radius: 4px; }
+        .sheet-table td {
+            border: 1px solid #e2e8f0; padding: 0;
+            min-width: 80px; max-width: 200px;
+        }
+        .sheet-table td input.cell-input {
+            width: 100%; box-sizing: border-box;
+            border: none; outline: none; background: transparent;
+            padding: 5px 8px; font-size: 12px; color: #1e293b;
+        }
+        .sheet-table td input.cell-input:focus {
+            background: #eff6ff; box-shadow: inset 0 0 0 2px #3b82f6;
+        }
+        .sheet-table tr:hover td { background: #f8fafc; }
+        .sheet-table tr:hover td input.cell-input:not(:focus) { background: #f8fafc; }
+        .sheet-table .row-num {
+            position: sticky; left: 0; z-index: 1;
+            background: #f8fafc; border: 1px solid #e2e8f0;
+            padding: 4px 6px; text-align: center;
+            color: #94a3b8; font-size: 11px; min-width: 32px;
+            user-select: none;
+        }
+        .sheet-table .del-row-btn {
+            background: none; border: none; cursor: pointer;
+            color: #fca5a5; padding: 2px 4px; border-radius: 4px;
+            font-size: 11px; line-height: 1;
+        }
+        .sheet-table .del-row-btn:hover { color: #ef4444; background: #fee2e2; }
+        .sheet-table th.del-col-th { width: 28px; min-width: 28px; }
+        .editor-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
@@ -171,10 +219,33 @@
                 <p class="text-xs text-gray-400 mt-1">支持 .xlsx / .xls 格式</p>
             </div>
             <input type="file" id="file-personnel" accept=".xlsx,.xls" class="hidden" onchange="handleFileSelect(event,'personnel')">
-            <!-- 预览区 -->
-            <div id="preview-personnel" class="hidden mt-4 overflow-x-auto">
-                <p class="text-xs text-gray-500 mb-2 font-medium">数据预览（前5行）：</p>
-                <table id="preview-table-personnel" class="text-xs border-collapse w-full"></table>
+            <!-- 编辑器区 -->
+            <div id="editor-personnel" class="hidden mt-4 space-y-2">
+                <div class="editor-toolbar">
+                    <span class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                        <i class="fa-solid fa-table-cells text-blue-500"></i>
+                        数据预览与编辑
+                    </span>
+                    <span id="editor-personnel-count" class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full"></span>
+                    <div class="ml-auto flex gap-2">
+                        <button onclick="addRow('personnel')" class="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 flex items-center gap-1 transition-colors">
+                            <i class="fa-solid fa-plus"></i> 新增行
+                        </button>
+                        <button onclick="addColumn('personnel')" class="text-xs px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center gap-1 transition-colors">
+                            <i class="fa-solid fa-table-columns"></i> 新增列
+                        </button>
+                        <button onclick="exportEditorData('personnel')" class="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 flex items-center gap-1 transition-colors">
+                            <i class="fa-solid fa-file-arrow-down"></i> 导出 xlsx
+                        </button>
+                    </div>
+                </div>
+                <div class="sheet-editor">
+                    <table class="sheet-table" id="editor-table-personnel"></table>
+                </div>
+                <p class="text-xs text-gray-400 flex items-center gap-1">
+                    <i class="fa-solid fa-circle-info"></i>
+                    点击任意单元格或列头即可编辑；Tab 键跳到下一格；修改后点击「解析并应用数据」生效
+                </p>
             </div>
         </div>
 
@@ -195,9 +266,33 @@
                 <p class="text-xs text-gray-400 mt-1">支持 .xlsx / .xls 格式</p>
             </div>
             <input type="file" id="file-radar" accept=".xlsx,.xls" class="hidden" onchange="handleFileSelect(event,'radar')">
-            <div id="preview-radar" class="hidden mt-4 overflow-x-auto">
-                <p class="text-xs text-gray-500 mb-2 font-medium">数据预览（前5行）：</p>
-                <table id="preview-table-radar" class="text-xs border-collapse w-full"></table>
+            <!-- 编辑器区 -->
+            <div id="editor-radar" class="hidden mt-4 space-y-2">
+                <div class="editor-toolbar">
+                    <span class="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                        <i class="fa-solid fa-table-cells text-indigo-500"></i>
+                        数据预览与编辑
+                    </span>
+                    <span id="editor-radar-count" class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full"></span>
+                    <div class="ml-auto flex gap-2">
+                        <button onclick="addRow('radar')" class="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 flex items-center gap-1 transition-colors">
+                            <i class="fa-solid fa-plus"></i> 新增行
+                        </button>
+                        <button onclick="addColumn('radar')" class="text-xs px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center gap-1 transition-colors">
+                            <i class="fa-solid fa-table-columns"></i> 新增列
+                        </button>
+                        <button onclick="exportEditorData('radar')" class="text-xs px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center gap-1 transition-colors">
+                            <i class="fa-solid fa-file-arrow-down"></i> 导出 xlsx
+                        </button>
+                    </div>
+                </div>
+                <div class="sheet-editor">
+                    <table class="sheet-table" id="editor-table-radar"></table>
+                </div>
+                <p class="text-xs text-gray-400 flex items-center gap-1">
+                    <i class="fa-solid fa-circle-info"></i>
+                    点击任意单元格或列头即可编辑；Tab 键跳到下一格；修改后点击「解析并应用数据」生效
+                </p>
             </div>
         </div>
 
@@ -527,55 +622,205 @@ function handleFileSelect(e, type) {
     if (file) processFile(file, type);
 }
 
+// ─── 编辑器内部状态（存储当前编辑中的行列数据）──────────────────────
+// _editorData[type] = { headers: [...], rows: [[...], ...] }
+var _editorData = { personnel: null, radar: null };
+
 function processFile(file, type) {
-    const nameEl = document.getElementById(`${type === 'personnel' ? 'personnel' : 'radar'}-file-name`);
-    nameEl.textContent = `已选择：${file.name}`;
+    const nameEl = document.getElementById((type === 'personnel' ? 'personnel' : 'radar') + '-file-name');
+    nameEl.textContent = '已选择：' + file.name;
     nameEl.classList.add('text-blue-600');
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = function(e) {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '', header: 1 });
 
-        // 规范化列名（去换行、空格、单引号）
-        const normalized = jsonData.map(row => {
-            const r = {};
-            for (const k of Object.keys(row)) {
-                const cleanKey = String(k).replace(/[\r\n\t]/g,'').replace(/^'+|'+$/g,'').trim();
-                const val = row[k];
-                r[cleanKey] = val === null || val === undefined ? '' : String(val).replace(/^'+/,'').trim();
-            }
-            return r;
+        if (!jsonData || jsonData.length === 0) { showToast('文件为空，请检查！'); return; }
+
+        // 第一行作为表头，其余为数据行
+        const rawHeaders = jsonData[0].map(function(h) {
+            return String(h === null || h === undefined ? '' : h).replace(/[\r\n\t]/g,'').replace(/^'+|'+$/g,'').trim();
+        });
+        const rawRows = jsonData.slice(1).map(function(row) {
+            return rawHeaders.map(function(_, ci) {
+                const v = row[ci];
+                return String(v === null || v === undefined ? '' : v).replace(/^'+/,'').trim();
+            });
         });
 
-        if (type === 'personnel') {
-            _rawPersonnelData = normalized;
-        } else {
-            _rawRadarData = normalized;
-        }
-
-        showPreview(normalized, type);
+        _editorData[type] = { headers: rawHeaders, rows: rawRows };
+        syncEditorToRaw(type);
+        renderEditor(type);
     };
     reader.readAsArrayBuffer(file);
 }
 
-function showPreview(data, type) {
-    const previewDiv = document.getElementById(`preview-${type}`);
-    const table = document.getElementById(`preview-table-${type}`);
-    if (!data || data.length === 0) { previewDiv.classList.add('hidden'); return; }
+// 从编辑器状态同步到 _rawPersonnelData / _rawRadarData
+function syncEditorToRaw(type) {
+    const ed = _editorData[type];
+    if (!ed) return;
+    const normalized = ed.rows.map(function(row) {
+        const obj = {};
+        ed.headers.forEach(function(h, i) { obj[h] = row[i] !== undefined ? row[i] : ''; });
+        return obj;
+    }).filter(function(obj) {
+        // 过滤全空行
+        return Object.values(obj).some(function(v) { return String(v).trim() !== ''; });
+    });
+    if (type === 'personnel') { _rawPersonnelData = normalized; }
+    else { _rawRadarData = normalized; }
+}
 
-    const headers = Object.keys(data[0]);
-    const previewRows = data.slice(0, 5);
+// 渲染编辑器表格
+function renderEditor(type) {
+    const ed = _editorData[type];
+    const editorDiv = document.getElementById('editor-' + type);
+    const table = document.getElementById('editor-table-' + type);
+    const countEl = document.getElementById('editor-' + type + '-count');
+    if (!ed) { editorDiv.classList.add('hidden'); return; }
 
-    let html = `<thead><tr>${headers.map(h => `<th class="border border-gray-200 bg-gray-50 px-2 py-1 text-left font-semibold text-gray-600 whitespace-nowrap">${escHtml(h)}</th>`).join('')}</tr></thead>`;
-    html += `<tbody>${previewRows.map(row =>
-        `<tr>${headers.map(h => `<td class="border border-gray-200 px-2 py-1 text-gray-700 whitespace-nowrap max-w-[120px] truncate">${escHtml(String(row[h] ?? ''))}</td>`).join('')}</tr>`
-    ).join('')}</tbody>`;
+    editorDiv.classList.remove('hidden');
+    countEl.textContent = ed.rows.length + ' 行 × ' + ed.headers.length + ' 列';
 
+    let html = '<thead><tr>';
+    // 行号列头
+    html += '<th class="del-col-th row-num" style="background:#f8fafc;position:sticky;top:0;z-index:3;">#</th>';
+    // 各列头（可编辑）
+    ed.headers.forEach(function(h, ci) {
+        html += '<th><div class="th-inner">' +
+            '<input class="th-input" type="text" value="' + escAttr(h) + '" ' +
+            'data-type="' + type + '" data-col="' + ci + '" ' +
+            'onchange="onHeaderChange(this)" ' +
+            'onkeydown="handleCellKeydown(event,this,true)" ' +
+            'placeholder="列名" />' +
+            '<button class="del-row-btn" title="删除此列" onclick="deleteColumn(\'' + type + '\',' + ci + ')">✕</button>' +
+            '</div></th>';
+    });
+    html += '</tr></thead><tbody>';
+
+    ed.rows.forEach(function(row, ri) {
+        html += '<tr>';
+        // 行号 + 删除按钮
+        html += '<td class="row-num">' +
+            '<button class="del-row-btn" title="删除此行" onclick="deleteRow(\'' + type + '\',' + ri + ')">' +
+            (ri + 1) + '</button></td>';
+        ed.headers.forEach(function(_, ci) {
+            const val = row[ci] !== undefined ? row[ci] : '';
+            html += '<td><input class="cell-input" type="text" value="' + escAttr(val) + '" ' +
+                'data-type="' + type + '" data-row="' + ri + '" data-col="' + ci + '" ' +
+                'onchange="onCellChange(this)" ' +
+                'onkeydown="handleCellKeydown(event,this,false)" /></td>';
+        });
+        html += '</tr>';
+    });
+    html += '</tbody>';
     table.innerHTML = html;
-    previewDiv.classList.remove('hidden');
+}
+
+// 单元格值变更 → 同步到 _editorData
+function onCellChange(input) {
+    const type = input.dataset.type;
+    const ri = parseInt(input.dataset.row);
+    const ci = parseInt(input.dataset.col);
+    _editorData[type].rows[ri][ci] = input.value;
+    syncEditorToRaw(type);
+}
+
+// 列头变更 → 同步到 _editorData
+function onHeaderChange(input) {
+    const type = input.dataset.type;
+    const ci = parseInt(input.dataset.col);
+    _editorData[type].headers[ci] = input.value;
+    syncEditorToRaw(type);
+}
+
+// Tab / Enter 键盘导航
+function handleCellKeydown(e, input, isHeader) {
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        const type = input.dataset.type;
+        const ci = parseInt(input.dataset.col);
+        const ri = isHeader ? -1 : parseInt(input.dataset.row);
+        const ed = _editorData[type];
+        const nextCi = ci + 1;
+        const nextRi = ri + 1;
+        let nextInput = null;
+        if (nextCi < ed.headers.length) {
+            // 同行下一列
+            if (isHeader) {
+                nextInput = document.querySelector('.th-input[data-type="' + type + '"][data-col="' + nextCi + '"]');
+            } else {
+                nextInput = document.querySelector('.cell-input[data-type="' + type + '"][data-row="' + ri + '"][data-col="' + nextCi + '"]');
+            }
+        } else if (!isHeader && nextRi < ed.rows.length) {
+            // 下一行第一列
+            nextInput = document.querySelector('.cell-input[data-type="' + type + '"][data-row="' + nextRi + '"][data-col="0"]');
+        }
+        if (nextInput) nextInput.focus();
+    }
+}
+
+// 新增行
+function addRow(type) {
+    const ed = _editorData[type];
+    if (!ed) { showToast('请先上传文件！'); return; }
+    const emptyRow = ed.headers.map(function() { return ''; });
+    ed.rows.push(emptyRow);
+    syncEditorToRaw(type);
+    renderEditor(type);
+    // 滚动到底部并聚焦新行第一格
+    setTimeout(function() {
+        const lastRow = ed.rows.length - 1;
+        const firstCell = document.querySelector('.cell-input[data-type="' + type + '"][data-row="' + lastRow + '"][data-col="0"]');
+        if (firstCell) { firstCell.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); firstCell.focus(); }
+    }, 50);
+}
+
+// 新增列
+function addColumn(type) {
+    const ed = _editorData[type];
+    if (!ed) { showToast('请先上传文件！'); return; }
+    const newColName = '新列' + (ed.headers.length + 1);
+    ed.headers.push(newColName);
+    ed.rows.forEach(function(row) { row.push(''); });
+    syncEditorToRaw(type);
+    renderEditor(type);
+}
+
+// 删除行
+function deleteRow(type, ri) {
+    const ed = _editorData[type];
+    if (!ed) return;
+    ed.rows.splice(ri, 1);
+    syncEditorToRaw(type);
+    renderEditor(type);
+}
+
+// 删除列
+function deleteColumn(type, ci) {
+    const ed = _editorData[type];
+    if (!ed) return;
+    if (ed.headers.length <= 1) { showToast('至少保留一列！'); return; }
+    ed.headers.splice(ci, 1);
+    ed.rows.forEach(function(row) { row.splice(ci, 1); });
+    syncEditorToRaw(type);
+    renderEditor(type);
+}
+
+// 导出编辑后的数据为 xlsx
+function exportEditorData(type) {
+    const ed = _editorData[type];
+    if (!ed) { showToast('暂无数据可导出！'); return; }
+    const wsData = [ed.headers].concat(ed.rows);
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    const fname = type === 'personnel' ? '人员基础表_已编辑.xlsx' : '雷达图维度表_已编辑.xlsx';
+    XLSX.writeFile(wb, fname);
+    showToast('✅ 已导出 ' + fname);
 }
 
 // ─── 字段自动识别 ──────────────────────────────────────────────────
