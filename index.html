@@ -452,7 +452,7 @@ function getCategoryByScore(perf, compScore) {
     const p = /A/i.test(perf) ? 'A' : (/B/i.test(perf) ? 'B' : 'C');
     const c = parseFloat(compScore) || 0;
     if (p === 'A') return c < 60 ? 'B' : 'A';
-    if (p === 'B') return c < 60 ? 'D' : (c < 70 ? 'B' : 'B');
+    if (p === 'B') return c < 60 ? 'D' : (c < 70 ? 'B' : 'A');
     if (p === 'C') return c < 60 ? 'E' : (c < 70 ? 'D' : 'C');
     return 'D';
 }
