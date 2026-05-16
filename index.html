@@ -751,16 +751,26 @@ function dbRowToUser(r) {
     try { ext = JSON.parse(r.remark || '{}'); } catch(_) {}
     // 兼容旧格式（remark 不是 JSON 时直接作为评语）
     if (typeof ext !== 'object' || Array.isArray(ext)) ext = { comments: r.remark || '' };
+    const perf      = r.perf_rating || '';
+    const radarData = ext.radarData || [];
+    // 若有雷达图数据，用各维度得分之和作为能力总分
+    let compScore = parseFloat(r.ability_score) || 0;
+    if (radarData.length > 0) {
+        const sum = radarData.reduce(function(acc, item) { return acc + (parseFloat(item.score) || 0); }, 0);
+        compScore = Math.round(sum * 10) / 10;
+    }
+    const compId     = getCompId(compScore);
+    const categoryId = getCategoryByScore(perf, compScore);  // 始终重新计算，不依赖存储内容
     return {
         id: r.id,
         name: r.name || '',
         jobFamily: ext.jobFamily || '',
         role: r.position || '',
-        performance: r.perf_rating || '',
-        compScore: parseFloat(r.ability_score) || 0,
-        compId: ext.compId || getCompId(parseFloat(r.ability_score) || 0),
-        categoryId: r.category || '',
-        radarData: ext.radarData || [],
+        performance: perf,
+        compScore,
+        compId,
+        categoryId,
+        radarData,
         comments: ext.comments || '',
     };
 }
@@ -1085,10 +1095,36 @@ function handleImportData() {
     switchTab('dashboard');
     showToast('✅ 成功导入 ' + usersData.length + ' 名人员数据！正在同步到云端…');
 
-    // 异步保存到云端
+    // 异步保存到云端（人员数据 + 编辑器最新 xlsx）
     cloudSaveAll().then(function() {
         showToast('☁️ 数据已同步到云端，所有访客可见！');
     });
+    // 将编辑器当前状态重新生成 xlsx 并上传到云端（覆盖原始文件）
+    saveEditorAsCloudFile('personnel');
+    saveEditorAsCloudFile('radar');
+}
+
+// 将编辑器当前状态生成 xlsx Base64 并存入云端
+function saveEditorAsCloudFile(type) {
+    const ed = _editorData[type];
+    if (!ed || !ed.headers || ed.headers.length === 0) return;
+    try {
+        const wsData = [ed.headers].concat(ed.rows);
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+        // 生成 Base64
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+        const b64 = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + wbout;
+        _fileBase64[type] = b64;
+        const fname = _fileName[type] || (type === 'personnel' ? '人员基础表.xlsx' : '雷达图维度表.xlsx');
+        _fileName[type] = fname;
+        cloudSaveState('file_' + type + '_b64', b64);
+        cloudSaveState('file_' + type + '_name', fname);
+        showCloudDownloadBtn(type, fname);
+    } catch(e) {
+        console.warn('编辑器 xlsx 上传失败', type, e);
+    }
 }
 
 function clearAllData() {
