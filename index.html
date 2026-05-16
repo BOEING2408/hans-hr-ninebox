@@ -1637,6 +1637,8 @@ window.onload = async function() {
     // 渲染
     buildTagFilters();
     renderAll();
+    // 默认显示预览模式
+    switchOverallTab('preview');
     // 订阅实时变更
     subscribeRealtime();
 };
