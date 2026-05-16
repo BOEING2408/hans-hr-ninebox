@@ -503,8 +503,9 @@ function normalizePerf(raw) {
     if (!raw) return 'C';
     const s = String(raw).trim();
     if (/^A$/i.test(s) || /超出/.test(s)) return 'A';
-    if (/^B$/i.test(s) || /达标/.test(s)) return 'B';
+    // 必须先判断「不达标」，再判断「达标」，避免「不达标」被「达标」误匹配
     if (/^C$/i.test(s) || /不达标/.test(s)) return 'C';
+    if (/^B$/i.test(s) || /(?<!不)达标/.test(s)) return 'B';
     return 'C';
 }
 
@@ -937,6 +938,7 @@ function onCellChange(input) {
     const ci = parseInt(input.dataset.col);
     _editorData[type].rows[ri][ci] = input.value;
     syncEditorToRaw(type);
+    debounceSaveEditorToCloud(type);
 }
 
 function onHeaderChange(input) {
@@ -944,6 +946,7 @@ function onHeaderChange(input) {
     const ci = parseInt(input.dataset.col);
     _editorData[type].headers[ci] = input.value;
     syncEditorToRaw(type);
+    debounceSaveEditorToCloud(type);
 }
 
 function handleCellKeydown(e, input, isHeader) {
@@ -999,6 +1002,7 @@ function deleteRow(type, ri) {
     ed.rows.splice(ri, 1);
     syncEditorToRaw(type);
     renderEditor(type);
+    debounceSaveEditorToCloud(type);
 }
 
 function deleteColumn(type, ci) {
@@ -1009,6 +1013,7 @@ function deleteColumn(type, ci) {
     ed.rows.forEach(function(row) { row.splice(ci, 1); });
     syncEditorToRaw(type);
     renderEditor(type);
+    debounceSaveEditorToCloud(type);
 }
 
 function exportEditorData(type) {
@@ -1102,6 +1107,15 @@ function handleImportData() {
     // 将编辑器当前状态重新生成 xlsx 并上传到云端（覆盖原始文件）
     saveEditorAsCloudFile('personnel');
     saveEditorAsCloudFile('radar');
+}
+
+// 防抖：编辑器变更后延迟 2 秒自动保存到云端
+const _editorSaveTimer = { personnel: null, radar: null };
+function debounceSaveEditorToCloud(type) {
+    if (_editorSaveTimer[type]) clearTimeout(_editorSaveTimer[type]);
+    _editorSaveTimer[type] = setTimeout(function() {
+        saveEditorAsCloudFile(type);
+    }, 2000);
 }
 
 // 将编辑器当前状态生成 xlsx Base64 并存入云端
