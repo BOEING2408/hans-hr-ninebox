@@ -1418,14 +1418,19 @@ function scrollMatrixColIntoView(colIdx) {
     const firstRow = body.querySelector(':scope > div');
     if (!firstRow) return;
     const cells = firstRow.querySelectorAll(':scope > div');
+    const headerCell = cells[0]; // 行标题列
     const targetCell = cells[colIdx + 1]; // +1 跳过行标题
     if (!targetCell) return;
     const scrollContainer = document.querySelector('.overflow-x-auto');
     if (!scrollContainer) return;
-    const containerLeft = scrollContainer.getBoundingClientRect().left;
-    const cellLeft = targetCell.getBoundingClientRect().left;
-    const offset = cellLeft - containerLeft + scrollContainer.scrollLeft - 8;
-    scrollContainer.scrollTo({ left: Math.max(0, offset), behavior: 'smooth' });
+    // 目标格子相对于滚动容器内容区的绝对偏移
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = targetCell.getBoundingClientRect();
+    const headerWidth = headerCell ? headerCell.getBoundingClientRect().width : 0;
+    // 让目标格子左边缘对齐到行标题右边缘（即内容区最左边）
+    const targetAbsLeft = targetRect.left - containerRect.left + scrollContainer.scrollLeft;
+    const scrollTo = targetAbsLeft - headerWidth;
+    scrollContainer.scrollTo({ left: Math.max(0, scrollTo), behavior: 'smooth' });
 }
 
 var _justOpenedSearchPanel = false;
