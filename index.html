@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- SheetJS：解析 .xlsx 文件 -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <!-- Supabase JS：云端共享数据 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <style>
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
@@ -24,11 +26,7 @@
 
         /* 标签筛选激活态 */
         .tag-btn { transition: all .15s; }
-        .tag-btn.active {
-            background-color: #2563eb;
-            color: #fff;
-            border-color: #2563eb;
-        }
+        .tag-btn.active { background-color: #2563eb; color: #fff; border-color: #2563eb; }
 
         /* 拖拽上传区域 */
         .drop-zone { transition: border-color .2s, background-color .2s; }
@@ -38,9 +36,7 @@
         .radar-label { font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
 
         /* 模态框动画 */
-        #user-modal .modal-inner {
-            animation: modalIn .2s ease-out;
-        }
+        #user-modal .modal-inner { animation: modalIn .2s ease-out; }
         @keyframes modalIn {
             from { opacity: 0; transform: scale(.96) translateY(8px); }
             to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -54,28 +50,20 @@
             background: #f8fafc; border: 1px solid #e2e8f0;
             padding: 0; white-space: nowrap;
         }
-        .sheet-table th .th-inner {
-            display: flex; align-items: center; gap: 4px;
-            padding: 6px 8px;
-        }
+        .sheet-table th .th-inner { display: flex; align-items: center; gap: 4px; padding: 6px 8px; }
         .sheet-table th input.th-input {
             background: transparent; border: none; outline: none;
             font-weight: 600; color: #374151; width: 100%; min-width: 60px;
             font-size: 12px; cursor: text;
         }
         .sheet-table th input.th-input:focus { background: #eff6ff; border-radius: 4px; }
-        .sheet-table td {
-            border: 1px solid #e2e8f0; padding: 0;
-            min-width: 80px; max-width: 200px;
-        }
+        .sheet-table td { border: 1px solid #e2e8f0; padding: 0; min-width: 80px; max-width: 200px; }
         .sheet-table td input.cell-input {
             width: 100%; box-sizing: border-box;
             border: none; outline: none; background: transparent;
             padding: 5px 8px; font-size: 12px; color: #1e293b;
         }
-        .sheet-table td input.cell-input:focus {
-            background: #eff6ff; box-shadow: inset 0 0 0 2px #3b82f6;
-        }
+        .sheet-table td input.cell-input:focus { background: #eff6ff; box-shadow: inset 0 0 0 2px #3b82f6; }
         .sheet-table tr:hover td { background: #f8fafc; }
         .sheet-table tr:hover td input.cell-input:not(:focus) { background: #f8fafc; }
         .sheet-table .row-num {
@@ -93,9 +81,18 @@
         .sheet-table .del-row-btn:hover { color: #ef4444; background: #fee2e2; }
         .sheet-table th.del-col-th { width: 28px; min-width: 28px; }
         .editor-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+        /* 云端加载遮罩 */
+        #cloud-loading { transition: opacity .3s; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
+
+<!-- ===================== 云端加载遮罩 ===================== -->
+<div id="cloud-loading" class="fixed inset-0 bg-white/90 z-[9999] flex flex-col items-center justify-center gap-3">
+    <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+    <p class="text-sm text-gray-500 font-medium">正在从云端加载数据…</p>
+</div>
 
 <!-- ===================== 顶部导航 ===================== -->
 <header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
@@ -154,7 +151,8 @@
             </div>
             <textarea id="overall-comments"
                 class="w-full min-h-[72px] p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none resize-y"
-                placeholder="在此输入整体盘点总结..."></textarea>
+                placeholder="在此输入整体盘点总结..."
+                oninput="saveOverallComments()"></textarea>
         </div>
 
         <!-- 人才矩阵 -->
@@ -165,7 +163,6 @@
             </div>
             <div class="overflow-x-auto p-4">
                 <div class="min-w-[900px] border border-gray-300 rounded-lg overflow-hidden">
-                    <!-- 表头 -->
                     <div class="grid grid-cols-5 border-b border-gray-300 bg-gray-100">
                         <div class="p-3 border-r border-gray-300 flex items-center justify-center font-bold text-gray-700 text-sm">绩效 \ 能力</div>
                         <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">低能力<br><span class="font-normal text-xs text-gray-500">(得分&lt;60)</span></div>
@@ -194,11 +191,12 @@
 
         <div class="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-xl text-sm">
             <h3 class="font-bold mb-2 flex items-center gap-2"><i class="fa-solid fa-circle-info"></i> 导入说明</h3>
-            <p class="mb-1">请上传两个 <strong>.xlsx</strong> 文件：</p>
+            <p class="mb-1">请上传两个 <strong>.xlsx</strong> 文件，系统自动按<strong>表头名称</strong>识别字段（列顺序不限）：</p>
             <ul class="list-disc list-inside space-y-1 text-xs leading-relaxed">
-                <li><strong>人员基础表</strong>（必填）：列名包含 <code class="bg-blue-100 px-1 rounded">姓名、序列、岗位、绩效评价、能力得分</code>，可选 <code class="bg-blue-100 px-1 rounded">人员分类</code></li>
-                <li><strong>雷达图维度表</strong>（可选）：列名包含 <code class="bg-blue-100 px-1 rounded">姓名、评价维度、满分、得分</code>，可选 <code class="bg-blue-100 px-1 rounded">评语</code></li>
-                <li>列名顺序不限，系统自动识别；绩效填 A/B/C，能力得分填 0-100 数字</li>
+                <li><strong>人员基础表</strong>（必填）：需包含 <code class="bg-blue-100 px-1 rounded">姓名、岗位序列（或"序列"）、岗位、绩效评价、能力等级评估（或"能力得分"）</code></li>
+                <li><strong>雷达图维度表</strong>（可选）：需包含 <code class="bg-blue-100 px-1 rounded">姓名、能力项（或"评价维度"）、总分（或"满分"）、实际得分（或"得分"）</code>，可选 <code class="bg-blue-100 px-1 rounded">评语</code></li>
+                <li>绩效支持：<code class="bg-blue-100 px-1 rounded">A/超出/超出目标</code>、<code class="bg-blue-100 px-1 rounded">B/达标</code>、<code class="bg-blue-100 px-1 rounded">C/不达标</code></li>
+                <li>能力等级支持：<code class="bg-blue-100 px-1 rounded">高/中上/中下/低</code> 或直接填 0-100 数字</li>
             </ul>
         </div>
 
@@ -227,7 +225,10 @@
                         数据预览与编辑
                     </span>
                     <span id="editor-personnel-count" class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full"></span>
-                    <div class="ml-auto flex gap-2">
+                    <div class="ml-auto flex gap-2 flex-wrap">
+                        <button onclick="normalizeToTemplate('personnel')" class="text-xs px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 flex items-center gap-1 transition-colors" title="将当前数据重新整理为标准列顺序">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> 格式化为标准模板
+                        </button>
                         <button onclick="addRow('personnel')" class="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 flex items-center gap-1 transition-colors">
                             <i class="fa-solid fa-plus"></i> 新增行
                         </button>
@@ -274,7 +275,10 @@
                         数据预览与编辑
                     </span>
                     <span id="editor-radar-count" class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full"></span>
-                    <div class="ml-auto flex gap-2">
+                    <div class="ml-auto flex gap-2 flex-wrap">
+                        <button onclick="normalizeToTemplate('radar')" class="text-xs px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 flex items-center gap-1 transition-colors" title="将当前数据重新整理为标准列顺序">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> 格式化为标准模板
+                        </button>
                         <button onclick="addRow('radar')" class="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 flex items-center gap-1 transition-colors">
                             <i class="fa-solid fa-plus"></i> 新增行
                         </button>
@@ -327,7 +331,6 @@
                 <h2 class="text-xl font-bold text-gray-800 truncate" id="modal-name">姓名</h2>
                 <span id="modal-job" class="text-sm font-normal text-gray-500 border border-gray-200 bg-white px-2 py-0.5 rounded shrink-0">序列 - 岗位</span>
             </div>
-            <!-- 上一位 / 下一位 -->
             <div class="flex items-center gap-2 ml-4">
                 <button onclick="navigateModal(-1)" id="btn-prev" class="p-1.5 text-gray-400 hover:bg-gray-200 rounded-md disabled:opacity-30" title="上一位">
                     <i class="fa-solid fa-chevron-left"></i>
@@ -347,7 +350,6 @@
 
             <!-- 左侧：基础信息 + 雷达图 -->
             <div class="space-y-5">
-                <!-- 三个数据卡片 -->
                 <div class="flex gap-3">
                     <div class="flex-1 bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
                         <div class="text-xs text-blue-600 font-semibold mb-1">绩效结果</div>
@@ -374,7 +376,6 @@
 
             <!-- 右侧：维度明细 + 评语 -->
             <div class="flex flex-col space-y-4">
-                <!-- 维度明细 -->
                 <div class="border border-gray-100 rounded-xl p-4 shadow-sm bg-white">
                     <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                         <i class="fa-solid fa-list-check text-blue-500"></i> 能力维度得分明细
@@ -382,7 +383,6 @@
                     <div id="modal-radar-details" class="space-y-2 max-h-48 overflow-y-auto pr-1"></div>
                 </div>
 
-                <!-- 评语编辑 -->
                 <div class="flex-1 border border-gray-100 rounded-xl p-4 shadow-sm bg-yellow-50/60 flex flex-col min-h-[180px]">
                     <h3 class="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
                         <i class="fa-solid fa-file-signature text-yellow-600"></i>
@@ -403,6 +403,11 @@
 
 <!-- ===================== JavaScript ===================== -->
 <script>
+// ─── Supabase 配置 ─────────────────────────────────────────────────
+const SUPABASE_URL = 'https://llvsrlliclirdnkycszm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_LElSDtd9PByfY_OISQJMEw_e4PtsxGV';
+const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // ─── 配置 ──────────────────────────────────────────────────────────
 const TALENT_CATEGORIES = {
     A: { id:'A', name:'重点人才',   action:'给挑战机会/重点培养', colorClass:'bg-cat-A', textColor:'text-green-900',  catBoxClass:'bg-green-50 border-green-200',  icon:'fa-award' },
@@ -425,180 +430,264 @@ const MATRIX_COLS = [
     { id:'high',     min:85, max:100 }
 ];
 
+// ─── 标准模板列定义 ─────────────────────────────────────────────────
+// 人员基础表标准列（附件1格式）
+const PERSONNEL_STD_COLS = ['岗位序列', '岗位', '姓名', '绩效评价', '能力等级评估'];
+// 雷达图维度表标准列（附件2格式）
+const RADAR_STD_COLS = ['姓名', '管理序列', '岗位', '能力项', '总分', '实际得分', '评语'];
+
 // ─── 状态 ──────────────────────────────────────────────────────────
 let usersData = [];
 let currentEditingUserId = null;
-let currentFilteredList = []; // 当前弹窗导航用的列表
+let currentFilteredList = [];
 let currentModalIndex = 0;
-
-// 标签筛选状态：{ '序列': Set<string>, '岗位': Set<string> }
 let activeTagFilters = { jobFamily: new Set(), role: new Set() };
-
-// 缓存解析后的原始数据（用于重新解析）
 let _rawPersonnelData = null;
 let _rawRadarData = null;
+let _editorData = { personnel: null, radar: null };
+let _cloudSaveTimer = null;
 
 // ─── 分类逻辑 ──────────────────────────────────────────────────────
 function getCategoryByScore(perf, compScore) {
     const p = /A/i.test(perf) ? 'A' : (/B/i.test(perf) ? 'B' : 'C');
     const c = parseFloat(compScore) || 0;
     if (p === 'A') return c < 60 ? 'B' : 'A';
-    if (p === 'B') return c < 60 ? 'C' : (c < 70 ? 'B' : 'A');
-    if (p === 'C') return c < 70 ? 'E' : 'D';
+    if (p === 'B') return c < 60 ? 'D' : (c < 70 ? 'B' : 'B');
+    if (p === 'C') return c < 60 ? 'E' : (c < 70 ? 'D' : 'C');
     return 'D';
 }
 
 function getCompId(score) {
-    if (score < 60) return 'low';
-    if (score < 70) return 'mid_low';
-    if (score < 85) return 'mid_high';
+    const s = parseFloat(score) || 0;
+    if (s < 60)  return 'low';
+    if (s < 70)  return 'mid_low';
+    if (s < 85)  return 'mid_high';
     return 'high';
 }
 
-// ─── 标签筛选 ──────────────────────────────────────────────────────
-function buildTagFilters() {
-    const area = document.getElementById('tag-filter-area');
-    const container = document.getElementById('tag-filter-buttons');
-    if (usersData.length === 0) { area.classList.add('hidden'); return; }
-    area.classList.remove('hidden');
+// ─── 字段自动识别（支持附件1/附件2格式）──────────────────────────
+const FIELD_ALIASES = {
+    // 人员基础表
+    name:        ['姓名','名字','员工姓名','员工名称','name'],
+    jobFamily:   ['岗位序列','序列','管理序列','职能序列','job_family','jobFamily'],
+    role:        ['岗位','职位','岗位名称','role','position'],
+    performance: ['绩效评价','绩效','绩效结果','绩效等级','perf','performance'],
+    compScore:   ['能力等级评估','能力得分','能力分','能力总分','能力评分','score','compScore','comp_score','能力等级'],
+    categoryId:  ['人员分类','分类','类别','category','categoryId'],
+    // 雷达图维度表
+    subject:     ['能力项','评价维度','维度','能力维度','维度名称','subject'],
+    fullMark:    ['总分','满分','最高分','fullMark','full_mark'],
+    radarScore:  ['实际得分','得分','分数','radarScore'],
+    comment:     ['评语','备注','说明','comment','remarks'],
+};
 
-    const families = [...new Set(usersData.map(u => u.jobFamily).filter(Boolean))].sort();
-    const roles    = [...new Set(usersData.map(u => u.role).filter(Boolean))].sort();
+// 绩效文字→字母映射
+function normalizePerf(raw) {
+    if (!raw) return 'C';
+    const s = String(raw).trim();
+    if (/^A$/i.test(s) || /超出/.test(s)) return 'A';
+    if (/^B$/i.test(s) || /达标/.test(s)) return 'B';
+    if (/^C$/i.test(s) || /不达标/.test(s)) return 'C';
+    return 'C';
+}
 
-    let html = '';
-    // "全部" 重置按钮
-    html += `<button class="tag-btn text-xs px-3 py-1 rounded-full border border-gray-300 bg-white text-gray-600 hover:border-blue-400 hover:text-blue-600 ${activeTagFilters.jobFamily.size === 0 && activeTagFilters.role.size === 0 ? 'active' : ''}"
-        onclick="resetTagFilters()">全部</button>`;
+// 能力等级文字→数字映射
+function normalizeCompScore(raw) {
+    if (!raw) return 0;
+    const s = String(raw).trim();
+    const num = parseFloat(s);
+    if (!isNaN(num)) return num;
+    // 文字等级转分数
+    if (/^高$/.test(s)) return 90;
+    if (/^中上$/.test(s)) return 78;
+    if (/^中下能力$/.test(s) || /^中下$/.test(s)) return 65;
+    if (/^低$/.test(s)) return 45;
+    return 0;
+}
 
-    if (families.length > 0) {
-        html += `<span class="text-xs text-gray-400 ml-1">序列：</span>`;
-        families.forEach(f => {
-            const isActive = activeTagFilters.jobFamily.has(f);
-            html += `<button class="tag-btn text-xs px-3 py-1 rounded-full border border-gray-300 bg-white text-gray-600 hover:border-blue-400 hover:text-blue-600 ${isActive ? 'active' : ''}"
-                onclick="toggleTagFilter('jobFamily','${escAttr(f)}')">${escHtml(f)}</button>`;
+function findField(row, key) {
+    const aliases = FIELD_ALIASES[key] || [];
+    for (const alias of aliases) {
+        if (row[alias] !== undefined && row[alias] !== null && String(row[alias]).trim() !== '') {
+            return String(row[alias]).replace(/^'+/,'').trim();
+        }
+    }
+    // 模糊匹配
+    const rowKeys = Object.keys(row);
+    for (const alias of aliases) {
+        const found = rowKeys.find(k => k.includes(alias) || alias.includes(k));
+        if (found && row[found] !== undefined && String(row[found]).trim() !== '') {
+            return String(row[found]).replace(/^'+/,'').trim();
+        }
+    }
+    return '';
+}
+
+// ─── 格式化为标准模板 ──────────────────────────────────────────────
+function normalizeToTemplate(type) {
+    const ed = _editorData[type];
+    if (!ed) { showToast('请先上传文件！'); return; }
+
+    const stdCols = type === 'personnel' ? PERSONNEL_STD_COLS : RADAR_STD_COLS;
+    const fieldKeys = type === 'personnel'
+        ? ['jobFamily', 'role', 'name', 'performance', 'compScore']
+        : ['name', 'jobFamily', 'role', 'subject', 'fullMark', 'radarScore', 'comment'];
+
+    // 先同步到 raw
+    syncEditorToRaw(type);
+    const rawData = type === 'personnel' ? _rawPersonnelData : _rawRadarData;
+    if (!rawData || rawData.length === 0) { showToast('暂无数据可格式化！'); return; }
+
+    // 重建 headers 和 rows
+    const newHeaders = [...stdCols];
+    const newRows = rawData.map(function(row) {
+        return fieldKeys.map(function(key) {
+            return findField(row, key);
         });
-    }
-    if (roles.length > 0) {
-        html += `<span class="text-xs text-gray-400 ml-2">岗位：</span>`;
-        roles.forEach(r => {
-            const isActive = activeTagFilters.role.has(r);
-            html += `<button class="tag-btn text-xs px-3 py-1 rounded-full border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600 ${isActive ? 'active' : ''}"
-                onclick="toggleTagFilter('role','${escAttr(r)}')">${escHtml(r)}</button>`;
-        });
-    }
-    container.innerHTML = html;
-}
-
-function toggleTagFilter(type, value) {
-    if (activeTagFilters[type].has(value)) {
-        activeTagFilters[type].delete(value);
-    } else {
-        activeTagFilters[type].add(value);
-    }
-    buildTagFilters();
-    renderAll();
-}
-
-function resetTagFilters() {
-    activeTagFilters.jobFamily.clear();
-    activeTagFilters.role.clear();
-    buildTagFilters();
-    renderAll();
-}
-
-function getFilteredUsers() {
-    return usersData.filter(u => {
-        const familyOk = activeTagFilters.jobFamily.size === 0 || activeTagFilters.jobFamily.has(u.jobFamily);
-        const roleOk   = activeTagFilters.role.size === 0      || activeTagFilters.role.has(u.role);
-        return familyOk && roleOk;
     });
+
+    _editorData[type] = { headers: newHeaders, rows: newRows };
+    syncEditorToRaw(type);
+    renderEditor(type);
+    showToast('✅ 已格式化为标准模板列顺序！');
 }
 
-// ─── 渲染 ──────────────────────────────────────────────────────────
-function renderAll() {
-    const filtered = getFilteredUsers();
-    const total = usersData.length;
-    const fCount = filtered.length;
-    document.getElementById('data-count-info').innerText =
-        total === 0 ? '当前已载入 0 名人员数据'
-                    : `当前已载入 ${total} 名人员数据（筛选后 ${fCount} 人）`;
+// ─── Supabase 云端操作 ─────────────────────────────────────────────
 
-    const emptyHint = document.getElementById('empty-hint');
-    if (total === 0) {
-        emptyHint.classList.remove('hidden');
-        document.getElementById('stats-container').innerHTML = '';
-        document.getElementById('matrix-body').innerHTML = '';
-        return;
-    }
-    emptyHint.classList.add('hidden');
-    renderStats(filtered);
-    renderMatrix(filtered);
-}
-
-function renderStats(filtered) {
-    const container = document.getElementById('stats-container');
-    const counts = { A:0, B:0, C:0, D:0, E:0 };
-    filtered.forEach(u => { if (counts[u.categoryId] !== undefined) counts[u.categoryId]++; });
-
-    let html = '';
-    ['A','B','C','D','E'].forEach(key => {
-        const def = TALENT_CATEGORIES[key];
-        const count = counts[key];
-        const pct = filtered.length > 0 ? Math.round(count / filtered.length * 100) : 0;
-        html += `
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col relative overflow-hidden">
-            <div class="absolute top-0 left-0 w-full h-1.5 ${def.colorClass}"></div>
-            <div class="flex justify-between items-center mb-1 mt-1">
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid ${def.icon} ${def.textColor}"></i>
-                    <span class="font-bold text-lg">${key}类</span>
-                </div>
-                <span class="text-2xl font-black text-gray-800">${count}<span class="text-xs font-normal text-gray-500 ml-1">人</span></span>
-            </div>
-            <p class="text-sm text-gray-600 mb-3">${def.name} (${pct}%)</p>
-            <div class="mt-auto bg-gray-50 p-2.5 rounded text-xs text-gray-600 border border-gray-100">
-                <strong>建议：</strong>${def.action}
-            </div>
-        </div>`;
-    });
-    container.innerHTML = html;
-}
-
-function renderMatrix(filtered) {
-    const container = document.getElementById('matrix-body');
-    let html = '';
-    MATRIX_ROWS.forEach(row => {
-        html += `<div class="grid grid-cols-5 border-b border-gray-300 last:border-b-0">`;
-        html += `<div class="p-3 border-r border-gray-300 bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-sm text-center leading-snug">${row.label}</div>`;
-        MATRIX_COLS.forEach(col => {
-            const targetCatId = getCategoryByScore(row.id, col.min);
-            const catDef = TALENT_CATEGORIES[targetCatId];
-            const cellUsers = filtered.filter(u => u.performance === row.id && u.compId === col.id);
-            const textColor = targetCatId === 'E' ? 'text-white' : 'text-gray-800';
-            html += `
-            <div class="p-2 border-r border-gray-300 last:border-r-0 min-h-[110px] flex flex-col ${catDef.colorClass}">
-                <div class="text-xs font-bold mb-2 pb-1 border-b border-black/10 ${textColor}">${catDef.id}类 · ${catDef.action.split('/')[0]}</div>
-                <div class="flex flex-wrap gap-1.5 flex-1 content-start">`;
-            cellUsers.forEach(user => {
-                html += `<button onclick="openModal('${user.id}')"
-                    class="bg-white/90 hover:bg-white text-gray-800 text-xs px-2 py-1 rounded border border-black/10 shadow-sm hover:shadow transition-all cursor-pointer">${escHtml(user.name)}</button>`;
+async function cloudLoadAll() {
+    try {
+        // 加载用户数据（employees 表）
+        const { data: rows, error } = await _sb.from('employees').select('*').order('sort_order');
+        if (!error && rows && rows.length > 0) {
+            usersData = rows.map(dbRowToUser);
+        }
+        // 加载整体评语（app_state 表）
+        const { data: stateRows } = await _sb.from('app_state').select('*');
+        if (stateRows) {
+            stateRows.forEach(function(r) {
+                if (r.key === 'overall_comments') {
+                    document.getElementById('overall-comments').value = r.value || '';
+                }
             });
-            html += `</div></div>`;
-        });
-        html += `</div>`;
+        }
+    } catch(e) {
+        console.warn('云端加载失败，使用本地缓存', e);
+        // 降级：从 localStorage 读取
+        try {
+            const local = localStorage.getItem('talent_users_v2');
+            if (local) usersData = JSON.parse(local);
+        } catch(_) {}
+    }
+}
+
+async function cloudSaveAll() {
+    if (usersData.length === 0) return;
+    try {
+        // 先清空再插入（保证数据一致）
+        await _sb.from('employees').delete().neq('id', '');
+        const rows = usersData.map(function(u, i) { return userToDbRow(u, i); });
+        await _sb.from('employees').insert(rows);
+        // 同步到 localStorage 作为备份
+        localStorage.setItem('talent_users_v2', JSON.stringify(usersData));
+    } catch(e) {
+        console.warn('云端保存失败，已保存到本地', e);
+        localStorage.setItem('talent_users_v2', JSON.stringify(usersData));
+    }
+}
+
+async function cloudSaveUser(user) {
+    try {
+        await _sb.from('employees').upsert(userToDbRow(user, 0), { onConflict: 'id' });
+        localStorage.setItem('talent_users_v2', JSON.stringify(usersData));
+    } catch(e) {
+        console.warn('云端更新失败', e);
+        localStorage.setItem('talent_users_v2', JSON.stringify(usersData));
+    }
+}
+
+async function cloudClearAll() {
+    try {
+        await _sb.from('employees').delete().neq('id', '');
+        localStorage.removeItem('talent_users_v2');
+    } catch(e) {
+        console.warn('云端清除失败', e);
+    }
+}
+
+async function cloudSaveState(key, value) {
+    try {
+        await _sb.from('app_state').upsert({ key: key, value: value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    } catch(e) {}
+}
+
+function userToDbRow(u, i) {
+    // 扩展字段存入 remark（JSON 格式）
+    const ext = JSON.stringify({
+        jobFamily: u.jobFamily || '',
+        compId: u.compId || '',
+        radarData: u.radarData || [],
+        comments: u.comments || '',
     });
-    container.innerHTML = html;
+    return {
+        id: u.id,
+        name: u.name || '',
+        position: u.role || '',       // role → position
+        perf_rating: u.performance || '',
+        ability_score: String(u.compScore || 0),
+        ability_level: '',
+        category: u.categoryId || '',
+        sort_order: String(i),
+        remark: ext,
+        loyalty: '',
+        current_box: '',
+        last_year_box: '',
+        grade: '',
+        overall_rating: '',
+    };
+}
+
+function dbRowToUser(r) {
+    let ext = {};
+    try { ext = JSON.parse(r.remark || '{}'); } catch(_) {}
+    // 兼容旧格式（remark 不是 JSON 时直接作为评语）
+    if (typeof ext !== 'object' || Array.isArray(ext)) ext = { comments: r.remark || '' };
+    return {
+        id: r.id,
+        name: r.name || '',
+        jobFamily: ext.jobFamily || '',
+        role: r.position || '',
+        performance: r.perf_rating || '',
+        compScore: parseFloat(r.ability_score) || 0,
+        compId: ext.compId || getCompId(parseFloat(r.ability_score) || 0),
+        categoryId: r.category || '',
+        radarData: ext.radarData || [],
+        comments: ext.comments || '',
+    };
+}
+
+// 订阅实时变更
+function subscribeRealtime() {
+    _sb.channel('talent-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, async function() {
+            const { data: rows } = await _sb.from('employees').select('*').order('sort_order');
+            if (rows) {
+                usersData = rows.map(dbRowToUser);
+                renderAll();
+                buildTagFilters();
+            }
+        })
+        .subscribe();
 }
 
 // ─── 标签页切换 ────────────────────────────────────────────────────
 function switchTab(tabId) {
-    ['dashboard','import'].forEach(id => {
-        document.getElementById(`tab-${id}`).classList.add('hidden-tab');
-        document.getElementById(`tab-btn-${id}`).className =
+    ['dashboard','import'].forEach(function(id) {
+        document.getElementById('tab-' + id).classList.add('hidden-tab');
+        document.getElementById('tab-btn-' + id).className =
             'px-4 py-1.5 rounded-md text-sm font-medium flex items-center gap-2 transition-colors text-gray-600 hover:text-gray-900';
     });
-    document.getElementById(`tab-${tabId}`).classList.remove('hidden-tab');
-    document.getElementById(`tab-btn-${tabId}`).className =
+    document.getElementById('tab-' + tabId).classList.remove('hidden-tab');
+    document.getElementById('tab-btn-' + tabId).className =
         'px-4 py-1.5 rounded-md text-sm font-medium flex items-center gap-2 transition-colors bg-white shadow text-blue-600';
     if (tabId === 'dashboard') renderAll();
 }
@@ -606,14 +695,14 @@ function switchTab(tabId) {
 // ─── 文件上传处理 ──────────────────────────────────────────────────
 function handleDragOver(e, type) {
     e.preventDefault();
-    document.getElementById(`drop-zone-${type}`).classList.add('dragover');
+    document.getElementById('drop-zone-' + type).classList.add('dragover');
 }
 function handleDragLeave(e, type) {
-    document.getElementById(`drop-zone-${type}`).classList.remove('dragover');
+    document.getElementById('drop-zone-' + type).classList.remove('dragover');
 }
 function handleDrop(e, type) {
     e.preventDefault();
-    document.getElementById(`drop-zone-${type}`).classList.remove('dragover');
+    handleDragLeave(e, type);
     const file = e.dataTransfer.files[0];
     if (file) processFile(file, type);
 }
@@ -621,10 +710,6 @@ function handleFileSelect(e, type) {
     const file = e.target.files[0];
     if (file) processFile(file, type);
 }
-
-// ─── 编辑器内部状态（存储当前编辑中的行列数据）──────────────────────
-// _editorData[type] = { headers: [...], rows: [[...], ...] }
-var _editorData = { personnel: null, radar: null };
 
 function processFile(file, type) {
     const nameEl = document.getElementById((type === 'personnel' ? 'personnel' : 'radar') + '-file-name');
@@ -649,11 +734,14 @@ function processFile(file, type) {
                 const v = row[ci];
                 return String(v === null || v === undefined ? '' : v).replace(/^'+/,'').trim();
             });
+        }).filter(function(row) {
+            return row.some(function(v) { return v.trim() !== ''; });
         });
 
         _editorData[type] = { headers: rawHeaders, rows: rawRows };
         syncEditorToRaw(type);
         renderEditor(type);
+        showToast('✅ 文件解析成功，共 ' + rawRows.length + ' 行数据');
     };
     reader.readAsArrayBuffer(file);
 }
@@ -667,7 +755,6 @@ function syncEditorToRaw(type) {
         ed.headers.forEach(function(h, i) { obj[h] = row[i] !== undefined ? row[i] : ''; });
         return obj;
     }).filter(function(obj) {
-        // 过滤全空行
         return Object.values(obj).some(function(v) { return String(v).trim() !== ''; });
     });
     if (type === 'personnel') { _rawPersonnelData = normalized; }
@@ -686,9 +773,7 @@ function renderEditor(type) {
     countEl.textContent = ed.rows.length + ' 行 × ' + ed.headers.length + ' 列';
 
     let html = '<thead><tr>';
-    // 行号列头
     html += '<th class="del-col-th row-num" style="background:#f8fafc;position:sticky;top:0;z-index:3;">#</th>';
-    // 各列头（可编辑）
     ed.headers.forEach(function(h, ci) {
         html += '<th><div class="th-inner">' +
             '<input class="th-input" type="text" value="' + escAttr(h) + '" ' +
@@ -703,7 +788,6 @@ function renderEditor(type) {
 
     ed.rows.forEach(function(row, ri) {
         html += '<tr>';
-        // 行号 + 删除按钮
         html += '<td class="row-num">' +
             '<button class="del-row-btn" title="删除此行" onclick="deleteRow(\'' + type + '\',' + ri + ')">' +
             (ri + 1) + '</button></td>';
@@ -720,7 +804,6 @@ function renderEditor(type) {
     table.innerHTML = html;
 }
 
-// 单元格值变更 → 同步到 _editorData
 function onCellChange(input) {
     const type = input.dataset.type;
     const ri = parseInt(input.dataset.row);
@@ -729,7 +812,6 @@ function onCellChange(input) {
     syncEditorToRaw(type);
 }
 
-// 列头变更 → 同步到 _editorData
 function onHeaderChange(input) {
     const type = input.dataset.type;
     const ci = parseInt(input.dataset.col);
@@ -737,7 +819,6 @@ function onHeaderChange(input) {
     syncEditorToRaw(type);
 }
 
-// Tab / Enter 键盘导航
 function handleCellKeydown(e, input, isHeader) {
     if (e.key === 'Tab') {
         e.preventDefault();
@@ -749,21 +830,18 @@ function handleCellKeydown(e, input, isHeader) {
         const nextRi = ri + 1;
         let nextInput = null;
         if (nextCi < ed.headers.length) {
-            // 同行下一列
             if (isHeader) {
                 nextInput = document.querySelector('.th-input[data-type="' + type + '"][data-col="' + nextCi + '"]');
             } else {
                 nextInput = document.querySelector('.cell-input[data-type="' + type + '"][data-row="' + ri + '"][data-col="' + nextCi + '"]');
             }
         } else if (!isHeader && nextRi < ed.rows.length) {
-            // 下一行第一列
             nextInput = document.querySelector('.cell-input[data-type="' + type + '"][data-row="' + nextRi + '"][data-col="0"]');
         }
         if (nextInput) nextInput.focus();
     }
 }
 
-// 新增行
 function addRow(type) {
     const ed = _editorData[type];
     if (!ed) { showToast('请先上传文件！'); return; }
@@ -771,7 +849,6 @@ function addRow(type) {
     ed.rows.push(emptyRow);
     syncEditorToRaw(type);
     renderEditor(type);
-    // 滚动到底部并聚焦新行第一格
     setTimeout(function() {
         const lastRow = ed.rows.length - 1;
         const firstCell = document.querySelector('.cell-input[data-type="' + type + '"][data-row="' + lastRow + '"][data-col="0"]');
@@ -779,7 +856,6 @@ function addRow(type) {
     }, 50);
 }
 
-// 新增列
 function addColumn(type) {
     const ed = _editorData[type];
     if (!ed) { showToast('请先上传文件！'); return; }
@@ -790,7 +866,6 @@ function addColumn(type) {
     renderEditor(type);
 }
 
-// 删除行
 function deleteRow(type, ri) {
     const ed = _editorData[type];
     if (!ed) return;
@@ -799,7 +874,6 @@ function deleteRow(type, ri) {
     renderEditor(type);
 }
 
-// 删除列
 function deleteColumn(type, ci) {
     const ed = _editorData[type];
     if (!ed) return;
@@ -810,7 +884,6 @@ function deleteColumn(type, ci) {
     renderEditor(type);
 }
 
-// 导出编辑后的数据为 xlsx
 function exportEditorData(type) {
     const ed = _editorData[type];
     if (!ed) { showToast('暂无数据可导出！'); return; }
@@ -823,55 +896,25 @@ function exportEditorData(type) {
     showToast('✅ 已导出 ' + fname);
 }
 
-// ─── 字段自动识别 ──────────────────────────────────────────────────
-const FIELD_ALIASES = {
-    name:        ['姓名','名字','员工姓名','员工名称','name'],
-    jobFamily:   ['序列','管理序列','职能序列','岗位序列','jobFamily','job_family'],
-    role:        ['岗位','职位','岗位名称','role','position'],
-    performance: ['绩效评价','绩效','绩效结果','perf','performance','绩效等级'],
-    compScore:   ['能力得分','能力分','能力总分','能力评分','score','compScore','comp_score'],
-    categoryId:  ['人员分类','分类','类别','category','categoryId'],
-    // 雷达图字段
-    subject:     ['评价维度','维度','能力维度','维度名称','subject'],
-    fullMark:    ['满分','最高分','fullMark','full_mark','总分'],
-    radarScore:  ['得分','分数','score','radarScore'],
-    comment:     ['评语','备注','说明','comment','remarks'],
-};
-
-function findField(row, key) {
-    const aliases = FIELD_ALIASES[key] || [];
-    for (const alias of aliases) {
-        if (row[alias] !== undefined && row[alias] !== null && String(row[alias]).trim() !== '') {
-            return String(row[alias]).replace(/^'+/,'').trim();
-        }
-    }
-    // 模糊匹配
-    const rowKeys = Object.keys(row);
-    for (const alias of aliases) {
-        const found = rowKeys.find(k => k.includes(alias) || alias.includes(k));
-        if (found && row[found] !== undefined) return String(row[found]).replace(/^'+/,'').trim();
-    }
-    return '';
-}
-
 // ─── 数据解析与应用 ────────────────────────────────────────────────
 function handleImportData() {
     if (!_rawPersonnelData || _rawPersonnelData.length === 0) {
-        alert('请先上传人员基础表（.xlsx 文件）！');
+        showToast('⚠️ 请先上传人员基础表（.xlsx 文件）！', 4000);
         return;
     }
 
     const parsedUsers = {};
 
-    _rawPersonnelData.forEach((row, i) => {
+    _rawPersonnelData.forEach(function(row, i) {
         const name = findField(row, 'name');
         if (!name) return;
 
         const jobFamily   = findField(row, 'jobFamily');
         const role        = findField(row, 'role');
         const perfRaw     = findField(row, 'performance');
-        const performance = /A/i.test(perfRaw) ? 'A' : (/B/i.test(perfRaw) ? 'B' : 'C');
-        const compScore   = parseFloat(findField(row, 'compScore')) || 0;
+        const performance = normalizePerf(perfRaw);
+        const compScoreRaw = findField(row, 'compScore');
+        const compScore   = normalizeCompScore(compScoreRaw);
 
         let categoryId = getCategoryByScore(performance, compScore);
         const importedCat = findField(row, 'categoryId');
@@ -881,7 +924,7 @@ function handleImportData() {
         }
 
         parsedUsers[name] = {
-            id: `U_${Date.now()}_${i}`,
+            id: 'U_' + Date.now() + '_' + i,
             name, jobFamily, role, performance, compScore, categoryId,
             compId: getCompId(compScore),
             radarData: [],
@@ -890,24 +933,24 @@ function handleImportData() {
     });
 
     if (_rawRadarData && _rawRadarData.length > 0) {
-        _rawRadarData.forEach(row => {
+        _rawRadarData.forEach(function(row) {
             const name = findField(row, 'name');
             if (!name || !parsedUsers[name]) return;
             const subject   = findField(row, 'subject');
-            const fullMark  = parseFloat(findField(row, 'fullMark')) || 100;
+            const fullMark  = parseFloat(findField(row, 'fullMark')) || 10;
             const score     = parseFloat(findField(row, 'radarScore')) || 0;
             const comment   = findField(row, 'comment');
             if (!subject) return;
             parsedUsers[name].radarData.push({ subject, fullMark, score });
             if (comment) {
-                parsedUsers[name].comments += `【${subject}】${comment}\n`;
+                parsedUsers[name].comments += '【' + subject + '】' + comment + '\n';
             }
         });
     }
 
-    Object.values(parsedUsers).forEach(u => {
+    Object.values(parsedUsers).forEach(function(u) {
         if (!u.comments) {
-            u.comments = `请在此处输入关于${u.name}的盘点评语及后续管理建议...`;
+            u.comments = '请在此处输入关于' + u.name + '的盘点评语及后续管理建议...';
         }
     });
 
@@ -916,40 +959,177 @@ function handleImportData() {
     activeTagFilters.role.clear();
     buildTagFilters();
     switchTab('dashboard');
-    // 显示成功提示（toast 方式，不阻塞）
-    showToast(`✅ 成功导入 ${usersData.length} 名人员数据！`);
+    showToast('✅ 成功导入 ' + usersData.length + ' 名人员数据！正在同步到云端…');
+
+    // 异步保存到云端
+    cloudSaveAll().then(function() {
+        showToast('☁️ 数据已同步到云端，所有访客可见！');
+    });
 }
 
 function clearAllData() {
-    if (!confirm('确定要清除所有数据吗？')) return;
+    if (!confirm('确定要清除所有数据吗？此操作将同步清除云端数据！')) return;
     usersData = [];
     _rawPersonnelData = null;
     _rawRadarData = null;
+    _editorData = { personnel: null, radar: null };
     activeTagFilters.jobFamily.clear();
     activeTagFilters.role.clear();
     document.getElementById('personnel-file-name').textContent = '点击选择或拖拽 .xlsx 文件';
     document.getElementById('radar-file-name').textContent = '点击选择或拖拽 .xlsx 文件（可选）';
-    document.getElementById('preview-personnel').classList.add('hidden');
-    document.getElementById('preview-radar').classList.add('hidden');
+    document.getElementById('editor-personnel').classList.add('hidden');
+    document.getElementById('editor-radar').classList.add('hidden');
     document.getElementById('file-personnel').value = '';
     document.getElementById('file-radar').value = '';
     buildTagFilters();
     renderAll();
+    cloudClearAll().then(function() {
+        showToast('✅ 数据已清除（含云端）');
+    });
 }
 
-// ─── 雷达图 SVG 生成 ───────────────────────────────────────────────
+function saveOverallComments() {
+    clearTimeout(_cloudSaveTimer);
+    _cloudSaveTimer = setTimeout(function() {
+        const val = document.getElementById('overall-comments').value;
+        cloudSaveState('overall_comments', val);
+    }, 1500);
+}
+
+// ─── 标签筛选 ──────────────────────────────────────────────────────
+function buildTagFilters() {
+    const area = document.getElementById('tag-filter-area');
+    const container = document.getElementById('tag-filter-buttons');
+    if (usersData.length === 0) { area.classList.add('hidden'); return; }
+    area.classList.remove('hidden');
+
+    const families = [...new Set(usersData.map(function(u) { return u.jobFamily; }).filter(Boolean))].sort();
+    const roles    = [...new Set(usersData.map(function(u) { return u.role; }).filter(Boolean))].sort();
+
+    let html = '';
+    const allActive = activeTagFilters.jobFamily.size === 0 && activeTagFilters.role.size === 0;
+    html += '<button class="tag-btn text-xs px-3 py-1 rounded-full border border-gray-300 bg-white text-gray-600 hover:border-blue-400 hover:text-blue-600 ' + (allActive ? 'active' : '') + '" onclick="resetTagFilters()">全部</button>';
+
+    if (families.length > 0) {
+        html += '<span class="text-xs text-gray-400 ml-1">序列：</span>';
+        families.forEach(function(f) {
+            const isActive = activeTagFilters.jobFamily.has(f);
+            html += '<button class="tag-btn text-xs px-3 py-1 rounded-full border border-gray-300 bg-white text-gray-600 hover:border-blue-400 hover:text-blue-600 ' + (isActive ? 'active' : '') + '" onclick="toggleTagFilter(\'jobFamily\',\'' + escAttr(f) + '\')">' + escHtml(f) + '</button>';
+        });
+    }
+    if (roles.length > 0) {
+        html += '<span class="text-xs text-gray-400 ml-2">岗位：</span>';
+        roles.forEach(function(r) {
+            const isActive = activeTagFilters.role.has(r);
+            html += '<button class="tag-btn text-xs px-3 py-1 rounded-full border border-gray-300 bg-white text-gray-600 hover:border-indigo-400 hover:text-indigo-600 ' + (isActive ? 'active' : '') + '" onclick="toggleTagFilter(\'role\',\'' + escAttr(r) + '\')">' + escHtml(r) + '</button>';
+        });
+    }
+    container.innerHTML = html;
+}
+
+function toggleTagFilter(type, value) {
+    if (activeTagFilters[type].has(value)) {
+        activeTagFilters[type].delete(value);
+    } else {
+        activeTagFilters[type].add(value);
+    }
+    buildTagFilters();
+    renderAll();
+}
+
+function resetTagFilters() {
+    activeTagFilters.jobFamily.clear();
+    activeTagFilters.role.clear();
+    buildTagFilters();
+    renderAll();
+}
+
+function getFilteredUsers() {
+    return usersData.filter(function(u) {
+        const familyOk = activeTagFilters.jobFamily.size === 0 || activeTagFilters.jobFamily.has(u.jobFamily);
+        const roleOk   = activeTagFilters.role.size === 0      || activeTagFilters.role.has(u.role);
+        return familyOk && roleOk;
+    });
+}
+
+// ─── 渲染 ──────────────────────────────────────────────────────────
+function renderAll() {
+    const filtered = getFilteredUsers();
+    const total = usersData.length;
+    const fCount = filtered.length;
+    document.getElementById('data-count-info').innerText =
+        total === 0 ? '当前已载入 0 名人员数据'
+                    : '当前已载入 ' + total + ' 名人员数据（筛选后 ' + fCount + ' 人）';
+
+    const emptyHint = document.getElementById('empty-hint');
+    if (total === 0) {
+        emptyHint.classList.remove('hidden');
+        document.getElementById('stats-container').innerHTML = '';
+        document.getElementById('matrix-body').innerHTML = '';
+        return;
+    }
+    emptyHint.classList.add('hidden');
+    renderStats(filtered);
+    renderMatrix(filtered);
+}
+
+function renderStats(filtered) {
+    const container = document.getElementById('stats-container');
+    const counts = { A:0, B:0, C:0, D:0, E:0 };
+    filtered.forEach(function(u) { if (counts[u.categoryId] !== undefined) counts[u.categoryId]++; });
+
+    let html = '';
+    ['A','B','C','D','E'].forEach(function(key) {
+        const def = TALENT_CATEGORIES[key];
+        const count = counts[key];
+        const pct = filtered.length > 0 ? Math.round(count / filtered.length * 100) : 0;
+        html += '<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col relative overflow-hidden">' +
+            '<div class="absolute top-0 left-0 w-full h-1.5 ' + def.colorClass + '"></div>' +
+            '<div class="flex justify-between items-center mb-1 mt-1">' +
+            '<div class="flex items-center gap-2"><i class="fa-solid ' + def.icon + ' ' + def.textColor + '"></i><span class="font-bold text-lg">' + key + '类</span></div>' +
+            '<span class="text-2xl font-black text-gray-800">' + count + '<span class="text-xs font-normal text-gray-500 ml-1">人</span></span>' +
+            '</div>' +
+            '<p class="text-sm text-gray-600 mb-3">' + def.name + ' (' + pct + '%)</p>' +
+            '<div class="mt-auto bg-gray-50 p-2.5 rounded text-xs text-gray-600 border border-gray-100"><strong>建议：</strong>' + def.action + '</div>' +
+            '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function renderMatrix(filtered) {
+    const container = document.getElementById('matrix-body');
+    let html = '';
+    MATRIX_ROWS.forEach(function(row) {
+        html += '<div class="grid grid-cols-5 border-b border-gray-300 last:border-b-0">';
+        html += '<div class="p-3 border-r border-gray-300 bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-sm text-center leading-snug">' + row.label + '</div>';
+        MATRIX_COLS.forEach(function(col) {
+            const targetCatId = getCategoryByScore(row.id, col.min);
+            const catDef = TALENT_CATEGORIES[targetCatId];
+            const cellUsers = filtered.filter(function(u) { return u.performance === row.id && u.compId === col.id; });
+            const textColor = targetCatId === 'E' ? 'text-white' : 'text-gray-800';
+            html += '<div class="p-2 border-r border-gray-300 last:border-r-0 min-h-[110px] flex flex-col ' + catDef.colorClass + '">' +
+                '<div class="text-xs font-bold mb-2 pb-1 border-b border-black/10 ' + textColor + '">' + catDef.id + '类 · ' + catDef.action.split('/')[0] + '</div>' +
+                '<div class="flex flex-wrap gap-1.5 flex-1 content-start">';
+            cellUsers.forEach(function(user) {
+                html += '<button onclick="openModal(\'' + user.id + '\')" class="bg-white/90 hover:bg-white text-gray-800 text-xs px-2 py-1 rounded border border-black/10 shadow-sm hover:shadow transition-all cursor-pointer">' + escHtml(user.name) + '</button>';
+            });
+            html += '</div></div>';
+        });
+        html += '</div>';
+    });
+    container.innerHTML = html;
+}
+
+// ─── 雷达图 SVG ────────────────────────────────────────────────────
 function generateSVGRadar(data) {
     if (!data || data.length === 0) {
-        return `<div class="text-gray-400 text-sm py-8 text-center">
-            <i class="fa-solid fa-chart-area text-3xl text-gray-200 mb-2 block"></i>
-            暂无雷达图指标数据
-        </div>`;
+        return '<div class="text-gray-400 text-sm py-8 text-center"><i class="fa-solid fa-chart-area text-3xl text-gray-200 mb-2 block"></i>暂无雷达图指标数据</div>';
     }
 
     const size = 280;
     const cx = size / 2;
     const cy = size / 2;
-    const R  = size / 2 - 48; // 留出标签空间
+    const R  = size / 2 - 48;
     const n  = data.length;
     const step = (Math.PI * 2) / n;
 
@@ -959,41 +1139,36 @@ function generateSVGRadar(data) {
         return { x: cx + ratio * R * Math.cos(angle), y: cy + ratio * R * Math.sin(angle) };
     }
 
-    // 网格层
     let gridSvg = '';
-    [0.2, 0.4, 0.6, 0.8, 1.0].forEach(ratio => {
-        const pts = data.map((_, i) => {
+    [0.2, 0.4, 0.6, 0.8, 1.0].forEach(function(ratio) {
+        const pts = data.map(function(_, i) {
             const a = i * step - Math.PI / 2;
-            return `${cx + ratio * R * Math.cos(a)},${cy + ratio * R * Math.sin(a)}`;
+            return (cx + ratio * R * Math.cos(a)) + ',' + (cy + ratio * R * Math.sin(a));
         }).join(' ');
-        gridSvg += `<polygon points="${pts}" fill="none" stroke="#e5e7eb" stroke-width="1"/>`;
+        gridSvg += '<polygon points="' + pts + '" fill="none" stroke="#e5e7eb" stroke-width="1"/>';
     });
 
-    // 轴线
     let axisSvg = '';
-    data.forEach((_, i) => {
+    data.forEach(function(_, i) {
         const a = i * step - Math.PI / 2;
-        axisSvg += `<line x1="${cx}" y1="${cy}" x2="${cx + R * Math.cos(a)}" y2="${cy + R * Math.sin(a)}" stroke="#e5e7eb" stroke-width="1"/>`;
+        axisSvg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + R * Math.cos(a)) + '" y2="' + (cy + R * Math.sin(a)) + '" stroke="#e5e7eb" stroke-width="1"/>';
     });
 
-    // 数据多边形
-    const dataPoints = data.map((d, i) => {
+    const dataPoints = data.map(function(d, i) {
         const p = pt(d.score, i, d.fullMark);
-        return `${p.x},${p.y}`;
+        return p.x + ',' + p.y;
     }).join(' ');
 
-    // 满分轮廓
-    const fullPoints = data.map((d, i) => {
+    const fullPoints = data.map(function(d, i) {
         const a = i * step - Math.PI / 2;
-        return `${cx + R * Math.cos(a)},${cy + R * Math.sin(a)}`;
+        return (cx + R * Math.cos(a)) + ',' + (cy + R * Math.sin(a));
     }).join(' ');
 
-    // 数据点 + 标签
     let dotsSvg = '';
     let labelsSvg = '';
-    data.forEach((d, i) => {
+    data.forEach(function(d, i) {
         const p = pt(d.score, i, d.fullMark);
-        dotsSvg += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="#4f46e5" stroke="#fff" stroke-width="1.5"/>`;
+        dotsSvg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="4" fill="#4f46e5" stroke="#fff" stroke-width="1.5"/>';
 
         const a = i * step - Math.PI / 2;
         const lx = cx + (R + 26) * Math.cos(a);
@@ -1001,29 +1176,22 @@ function generateSVGRadar(data) {
         const anchor = Math.cos(a) > 0.15 ? 'start' : (Math.cos(a) < -0.15 ? 'end' : 'middle');
         const baseline = Math.sin(a) > 0.15 ? 'hanging' : (Math.sin(a) < -0.15 ? 'auto' : 'middle');
 
-        // 维度名 + 分数
-        labelsSvg += `
-        <text x="${lx}" y="${ly}" text-anchor="${anchor}" dominant-baseline="${baseline}"
-            class="radar-label" font-size="10" fill="#374151" font-weight="600">${escHtml(d.subject)}</text>
-        <text x="${lx}" y="${parseFloat(ly) + 13}" text-anchor="${anchor}" dominant-baseline="${baseline}"
-            class="radar-label" font-size="9" fill="#6366f1">${d.score}/${d.fullMark}</text>`;
+        labelsSvg += '<text x="' + lx + '" y="' + ly + '" text-anchor="' + anchor + '" dominant-baseline="' + baseline + '" class="radar-label" font-size="10" fill="#374151" font-weight="600">' + escHtml(d.subject) + '</text>' +
+            '<text x="' + lx + '" y="' + (parseFloat(ly) + 13) + '" text-anchor="' + anchor + '" dominant-baseline="' + baseline + '" class="radar-label" font-size="9" fill="#6366f1">' + d.score + '/' + d.fullMark + '</text>';
     });
 
-    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="overflow-visible">
-        ${gridSvg}
-        ${axisSvg}
-        <polygon points="${fullPoints}" fill="rgba(59,130,246,0.04)" stroke="#bfdbfe" stroke-width="1" stroke-dasharray="4 3"/>
-        <polygon points="${dataPoints}" fill="rgba(99,102,241,0.35)" stroke="#4f46e5" stroke-width="2"/>
-        ${dotsSvg}
-        ${labelsSvg}
-    </svg>`;
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" class="overflow-visible">' +
+        gridSvg + axisSvg +
+        '<polygon points="' + fullPoints + '" fill="rgba(59,130,246,0.04)" stroke="#bfdbfe" stroke-width="1" stroke-dasharray="4 3"/>' +
+        '<polygon points="' + dataPoints + '" fill="rgba(99,102,241,0.35)" stroke="#4f46e5" stroke-width="2"/>' +
+        dotsSvg + labelsSvg + '</svg>';
 }
 
 // ─── 弹窗 ──────────────────────────────────────────────────────────
 function openModal(userId) {
     const filtered = getFilteredUsers();
     currentFilteredList = filtered;
-    currentModalIndex = filtered.findIndex(u => u.id === userId);
+    currentModalIndex = filtered.findIndex(function(u) { return u.id === userId; });
     if (currentModalIndex === -1) { currentModalIndex = 0; }
     renderModalContent(filtered[currentModalIndex]);
     document.getElementById('user-modal').classList.remove('hidden-tab');
@@ -1037,43 +1205,36 @@ function renderModalContent(user) {
     document.getElementById('modal-job').innerText = [user.jobFamily, user.role].filter(Boolean).join(' · ');
     document.getElementById('modal-perf').innerText = user.performance;
     document.getElementById('modal-score').innerText = user.compScore;
-    document.getElementById('modal-cat').innerText = `${user.categoryId}类`;
+    document.getElementById('modal-cat').innerText = user.categoryId + '类';
 
     const catDef = TALENT_CATEGORIES[user.categoryId] || TALENT_CATEGORIES['D'];
     const catBox = document.getElementById('modal-cat-box');
-    catBox.className = `flex-1 p-3 rounded-xl border text-center ${catDef.catBoxClass}`;
+    catBox.className = 'flex-1 p-3 rounded-xl border text-center ' + catDef.catBoxClass;
 
-    // 雷达图
     document.getElementById('modal-radar-container').innerHTML = generateSVGRadar(user.radarData);
 
-    // 维度明细
     let detailsHtml = '';
     if (user.radarData && user.radarData.length > 0) {
-        user.radarData.forEach(item => {
+        user.radarData.forEach(function(item) {
             const pct = Math.round(item.score / item.fullMark * 100);
             const barColor = pct >= 80 ? '#22c55e' : (pct >= 60 ? '#3b82f6' : '#f97316');
-            detailsHtml += `
-            <div class="text-sm border-b border-gray-50 pb-2 last:border-0 last:pb-0">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-gray-700 font-medium">${escHtml(item.subject)}</span>
-                    <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">${item.score} / ${item.fullMark}</span>
-                </div>
-                <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full transition-all" style="width:${pct}%;background:${barColor}"></div>
-                </div>
-            </div>`;
+            detailsHtml += '<div class="text-sm border-b border-gray-50 pb-2 last:border-0 last:pb-0">' +
+                '<div class="flex justify-between items-center mb-1">' +
+                '<span class="text-gray-700 font-medium">' + escHtml(item.subject) + '</span>' +
+                '<span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-700">' + item.score + ' / ' + item.fullMark + '</span>' +
+                '</div>' +
+                '<div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">' +
+                '<div class="h-full rounded-full transition-all" style="width:' + pct + '%;background:' + barColor + '"></div>' +
+                '</div></div>';
         });
     } else {
         detailsHtml = '<div class="text-sm text-gray-400 py-2">尚未导入雷达图指标数据</div>';
     }
     document.getElementById('modal-radar-details').innerHTML = detailsHtml;
-
-    // 评语
     document.getElementById('modal-comments').value = user.comments || '';
 
-    // 导航按钮
     const total = currentFilteredList.length;
-    document.getElementById('modal-nav-info').innerText = `${currentModalIndex + 1} / ${total}`;
+    document.getElementById('modal-nav-info').innerText = (currentModalIndex + 1) + ' / ' + total;
     document.getElementById('btn-prev').disabled = currentModalIndex <= 0;
     document.getElementById('btn-next').disabled = currentModalIndex >= total - 1;
 }
@@ -1088,9 +1249,14 @@ function navigateModal(dir) {
 
 function saveCurrentComments() {
     if (!currentEditingUserId) return;
-    const idx = usersData.findIndex(u => u.id === currentEditingUserId);
+    const idx = usersData.findIndex(function(u) { return u.id === currentEditingUserId; });
     if (idx > -1) {
-        usersData[idx].comments = document.getElementById('modal-comments').value;
+        const newComment = document.getElementById('modal-comments').value;
+        if (usersData[idx].comments !== newComment) {
+            usersData[idx].comments = newComment;
+            // 异步保存到云端
+            cloudSaveUser(usersData[idx]);
+        }
     }
 }
 
@@ -1109,19 +1275,19 @@ function downloadTemplate(type) {
     let data, filename;
     if (type === 'personnel') {
         data = [
-            { '姓名':'张三', '序列':'管理序列', '岗位':'总监', '绩效评价':'A', '能力得分':90, '人员分类':'A' },
-            { '姓名':'李四', '序列':'销售序列', '岗位':'经理', '绩效评价':'B', '能力得分':65, '人员分类':'B' },
-            { '姓名':'王五', '序列':'研发序列', '岗位':'工程师', '绩效评价':'C', '能力得分':55, '人员分类':'E' },
-            { '姓名':'赵六', '序列':'产品序列', '岗位':'产品总监', '绩效评价':'A', '能力得分':75, '人员分类':'A' },
+            { '岗位序列':'管理支持', '岗位':'财务岗', '姓名':'张三', '绩效评价':'达标', '能力等级评估':'中上' },
+            { '岗位序列':'管理支持', '岗位':'HR岗',   '姓名':'李四', '绩效评价':'达标', '能力等级评估':'中下' },
+            { '岗位序列':'产品及技术类', '岗位':'研发岗', '姓名':'王五', '绩效评价':'超出目标', '能力等级评估':'高' },
+            { '岗位序列':'供应链管理', '岗位':'供应链岗', '姓名':'赵六', '绩效评价':'不达标', '能力等级评估':'低' },
         ];
         filename = '人员基础表模板.xlsx';
     } else {
         data = [
-            { '姓名':'张三', '评价维度':'战略规划', '满分':100, '得分':92, '评语':'眼界开阔，能准确把握行业趋势' },
-            { '姓名':'张三', '评价维度':'团队管理', '满分':100, '得分':88, '评语':'团队凝聚力强' },
-            { '姓名':'张三', '评价维度':'业务创新', '满分':100, '得分':90, '评语':'' },
-            { '姓名':'李四', '评价维度':'市场开拓', '满分':100, '得分':70, '评语':'市场敏锐度不错' },
-            { '姓名':'李四', '评价维度':'客户服务', '满分':100, '得分':60, '评语':'' },
+            { '姓名':'张三', '管理序列':'管理支持', '岗位':'财务岗', '能力项':'会计核算质量', '总分':10, '实际得分':8, '评语':'核算准确，效率高' },
+            { '姓名':'张三', '管理序列':'管理支持', '岗位':'财务岗', '能力项':'税务合规与筹划', '总分':10, '实际得分':7, '评语':'' },
+            { '姓名':'张三', '管理序列':'管理支持', '岗位':'财务岗', '能力项':'预算编制及财务分析', '总分':10, '实际得分':6, '评语':'需加强' },
+            { '姓名':'李四', '管理序列':'管理支持', '岗位':'HR岗', '能力项':'招聘与人才甄选', '总分':10, '实际得分':7, '评语':'' },
+            { '姓名':'李四', '管理序列':'管理支持', '岗位':'HR岗', '能力项':'绩效管理', '总分':10, '实际得分':6, '评语':'' },
         ];
         filename = '雷达图维度表模板.xlsx';
     }
@@ -1132,8 +1298,6 @@ function downloadTemplate(type) {
 }
 
 // ─── 工具函数 ──────────────────────────────────────────────────────
-
-// ─── Toast 提示 ──────────────────────────────────────────────────────
 function showToast(msg, duration) {
     duration = duration || 3000;
     var toast = document.getElementById('_toast');
@@ -1154,16 +1318,14 @@ function showToast(msg, duration) {
 }
 
 function escHtml(s) {
-    return String(s)
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function escAttr(s) {
     return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;');
 }
 
 // ─── 键盘快捷键 ────────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', function(e) {
     const modal = document.getElementById('user-modal');
     if (modal.classList.contains('hidden-tab')) return;
     if (e.key === 'Escape') closeModal();
@@ -1172,8 +1334,18 @@ document.addEventListener('keydown', e => {
 });
 
 // ─── 初始化 ────────────────────────────────────────────────────────
-window.onload = () => {
+window.onload = async function() {
+    // 从云端加载数据
+    await cloudLoadAll();
+    // 隐藏加载遮罩
+    const loadingEl = document.getElementById('cloud-loading');
+    loadingEl.style.opacity = '0';
+    setTimeout(function() { loadingEl.style.display = 'none'; }, 300);
+    // 渲染
+    buildTagFilters();
     renderAll();
+    // 订阅实时变更
+    subscribeRealtime();
 };
 </script>
 </body>
