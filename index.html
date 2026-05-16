@@ -326,9 +326,9 @@
                     <div id="matrix-search-results" class="hidden"></div>
                 </div>
             </div>
-            <div id="matrix-scroll-container" class="overflow-x-auto p-4">
+            <div id="matrix-scroll-container" style="overflow-x:auto;width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;padding:16px 24px;box-sizing:border-box;">
                 <div style="width:1360px" class="border border-gray-300 rounded-lg overflow-hidden">
-                    <div style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 bg-gray-100">
+                    <div data-matrix-header style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 bg-gray-100">
                         <div class="p-3 border-r border-gray-300 flex items-center justify-center font-bold text-gray-700 text-sm">绩效 \ 能力</div>
                         <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">低能力<br><span class="font-normal text-xs text-gray-500">(得分&lt;60)</span></div>
                         <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">中下能力<br><span class="font-normal text-xs text-gray-500">(60≤得分&lt;70)</span></div>
@@ -1415,15 +1415,58 @@ function clearMatrixHighlight() {
 }
 
 function scrollMatrixColIntoView(colIdx) {
+    // 隐藏其他列，只保留行标题列（第0列）和目标列（colIdx+1）
+    // 矩阵使用 grid，通过控制每行子元素的 visibility 实现
     const sc = document.getElementById('matrix-scroll-container');
     if (!sc) return;
-    // 每列宽度：行标题 160px + 数据列每列 300px
-    const headerWidth = 160;
-    const colWidth = 300;
-    // 让目标列左边紧贴行标题右边（即滚动容器最左）
-    // 目标列在内容中的左边位置 = headerWidth + colIdx * colWidth
-    // 容器滚动到该位置后，容器左边显示的就是目标列左边
-    sc.scrollTo({ left: colIdx * colWidth, behavior: 'smooth' });
+
+    // 先恢复所有列可见
+    sc.querySelectorAll('[data-col-idx]').forEach(function(cell) {
+        cell.style.display = '';
+    });
+
+    // 获取所有矩阵行（包括 header 行和 body 行）
+    const allRows = sc.querySelectorAll('[data-matrix-row]');
+    allRows.forEach(function(row) {
+        const cells = row.children;
+        for (var i = 0; i < cells.length; i++) {
+            // i=0 是行标题列，i=colIdx+1 是目标列
+            if (i !== 0 && i !== colIdx + 1) {
+                cells[i].style.display = 'none';
+            } else {
+                cells[i].style.display = '';
+            }
+        }
+    });
+
+    // 同时处理 header 行（无 data-matrix-row 属性）
+    const headerRow = sc.querySelector('[data-matrix-header]');
+    if (headerRow) {
+        const cells = headerRow.children;
+        for (var i = 0; i < cells.length; i++) {
+            if (i !== 0 && i !== colIdx + 1) {
+                cells[i].style.display = 'none';
+            } else {
+                cells[i].style.display = '';
+            }
+        }
+    }
+
+    // 滚动到顶部
+    sc.scrollTo({ left: 0, behavior: 'smooth' });
+}
+
+function restoreMatrixAllCols() {
+    const sc = document.getElementById('matrix-scroll-container');
+    if (!sc) return;
+    const allRows = sc.querySelectorAll('[data-matrix-row]');
+    allRows.forEach(function(row) {
+        Array.from(row.children).forEach(function(cell) { cell.style.display = ''; });
+    });
+    const headerRow = sc.querySelector('[data-matrix-header]');
+    if (headerRow) {
+        Array.from(headerRow.children).forEach(function(cell) { cell.style.display = ''; });
+    }
 }
 
 function highlightSearchedUser(userId) {
@@ -1455,6 +1498,7 @@ function openSearchPanel(user) {
 function closeSearchPanel() {
     document.getElementById('search-detail-panel').classList.remove('open');
     clearMatrixHighlight();
+    restoreMatrixAllCols(); // 恢复所有列显示
     highlightSearchedUser(null); // 清除员工按钮高亮
     const inp = document.getElementById('matrix-search-input');
     if (inp) inp.value = '';
@@ -1613,7 +1657,7 @@ function renderMatrix(filtered) {
     const container = document.getElementById('matrix-body');
     let html = '';
     MATRIX_ROWS.forEach(function(row) {
-        html += '<div style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 last:border-b-0">';
+        html += '<div data-matrix-row style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 last:border-b-0">';
         html += '<div class="p-3 border-r border-gray-300 bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-sm text-center leading-snug">' + row.label + '</div>';
         MATRIX_COLS.forEach(function(col) {
             const targetCatId = getCategoryByScore(row.id, col.min);
