@@ -193,10 +193,10 @@
         .emp-btn-search-highlight { background: #fbbf24 !important; color: #1e293b !important; font-weight: 700 !important; box-shadow: 0 0 0 2px #f59e0b, 0 2px 8px rgba(251,191,36,.5) !important; transform: scale(1.08); }
         /* 搜索详情侧边面板 */
         #search-detail-panel {
-            position: fixed; top: 0; right: 0; bottom: 0; width: 420px;
-            background: #fff; box-shadow: -4px 0 32px rgba(0,0,0,.14);
+            position: fixed; top: 0; left: 0; bottom: 0; width: 420px;
+            background: #fff; box-shadow: 4px 0 32px rgba(0,0,0,.14);
             z-index: 500; display: flex; flex-direction: column;
-            transform: translateX(100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
+            transform: translateX(-100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
         }
         #search-detail-panel.open { transform: translateX(0); }
         #search-detail-panel .panel-header {
@@ -1415,45 +1415,14 @@ function clearMatrixHighlight() {
 }
 
 function scrollMatrixColIntoView(colIdx) {
-    // 隐藏其他列，只保留行标题列（第0列）和目标列（colIdx+1）
-    // 矩阵使用 grid，通过控制每行子元素的 visibility 实现
+    // 不再隐藏列，矩阵保持完整显示
+    // 可选：将目标列滚动到容器内可见区域
     const sc = document.getElementById('matrix-scroll-container');
     if (!sc) return;
-
-    // 先恢复所有列可见
-    sc.querySelectorAll('[data-col-idx]').forEach(function(cell) {
-        cell.style.display = '';
-    });
-
-    // 获取所有矩阵行（包括 header 行和 body 行）
-    const allRows = sc.querySelectorAll('[data-matrix-row]');
-    allRows.forEach(function(row) {
-        const cells = row.children;
-        for (var i = 0; i < cells.length; i++) {
-            // i=0 是行标题列，i=colIdx+1 是目标列
-            if (i !== 0 && i !== colIdx + 1) {
-                cells[i].style.display = 'none';
-            } else {
-                cells[i].style.display = '';
-            }
-        }
-    });
-
-    // 同时处理 header 行（无 data-matrix-row 属性）
-    const headerRow = sc.querySelector('[data-matrix-header]');
-    if (headerRow) {
-        const cells = headerRow.children;
-        for (var i = 0; i < cells.length; i++) {
-            if (i !== 0 && i !== colIdx + 1) {
-                cells[i].style.display = 'none';
-            } else {
-                cells[i].style.display = '';
-            }
-        }
-    }
-
-    // 滚动到顶部
-    sc.scrollTo({ left: 0, behavior: 'smooth' });
+    const colWidth = 300;
+    const headerWidth = 160;
+    const targetLeft = headerWidth + colIdx * colWidth;
+    sc.scrollTo({ left: Math.max(0, targetLeft - headerWidth), behavior: 'smooth' });
 }
 
 function restoreMatrixAllCols() {
@@ -1498,7 +1467,6 @@ function openSearchPanel(user) {
 function closeSearchPanel() {
     document.getElementById('search-detail-panel').classList.remove('open');
     clearMatrixHighlight();
-    restoreMatrixAllCols(); // 恢复所有列显示
     highlightSearchedUser(null); // 清除员工按钮高亮
     const inp = document.getElementById('matrix-search-input');
     if (inp) inp.value = '';
