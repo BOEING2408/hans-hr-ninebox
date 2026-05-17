@@ -193,10 +193,10 @@
         .emp-btn-search-highlight { background: #fbbf24 !important; color: #1e293b !important; font-weight: 700 !important; box-shadow: 0 0 0 2px #f59e0b, 0 2px 8px rgba(251,191,36,.5) !important; transform: scale(1.08); }
         /* 搜索详情侧边面板 */
         #search-detail-panel {
-            position: fixed; top: 0; right: 0; bottom: 0; width: 420px;
-            background: #fff; box-shadow: -4px 0 32px rgba(0,0,0,.14);
+            position: fixed; top: 0; left: 0; bottom: 0; width: 420px;
+            background: #fff; box-shadow: 4px 0 32px rgba(0,0,0,.14);
             z-index: 500; display: flex; flex-direction: column;
-            transform: translateX(100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
+            transform: translateX(-100%); transition: transform .28s cubic-bezier(.4,0,.2,1);
         }
         #search-detail-panel.open { transform: translateX(0); }
         #search-detail-panel .panel-header {
@@ -326,9 +326,9 @@
                     <div id="matrix-search-results" class="hidden"></div>
                 </div>
             </div>
-            <div id="matrix-scroll-container" class="overflow-x-auto p-4">
-                <div class="min-w-[900px] border border-gray-300 rounded-lg overflow-hidden">
-                    <div class="grid grid-cols-5 border-b border-gray-300 bg-gray-100">
+            <div id="matrix-scroll-container" style="overflow-x:auto;width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;padding:16px 24px;box-sizing:border-box;">
+                <div style="width:1360px" class="border border-gray-300 rounded-lg overflow-hidden">
+                    <div data-matrix-header style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 bg-gray-100">
                         <div class="p-3 border-r border-gray-300 flex items-center justify-center font-bold text-gray-700 text-sm">绩效 \ 能力</div>
                         <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">低能力<br><span class="font-normal text-xs text-gray-500">(得分&lt;60)</span></div>
                         <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">中下能力<br><span class="font-normal text-xs text-gray-500">(60≤得分&lt;70)</span></div>
@@ -1415,22 +1415,27 @@ function clearMatrixHighlight() {
 }
 
 function scrollMatrixColIntoView(colIdx) {
-    const body = document.getElementById('matrix-body');
-    if (!body) return;
-    const firstRow = body.querySelector(':scope > div');
-    if (!firstRow) return;
-    const cells = firstRow.querySelectorAll(':scope > div');
-    const headerCell = cells[0];
-    const targetCell = cells[colIdx + 1]; // +1 跳过行标题
-    if (!targetCell) return;
+    // 不再隐藏列，矩阵保持完整显示
+    // 可选：将目标列滚动到容器内可见区域
     const sc = document.getElementById('matrix-scroll-container');
     if (!sc) return;
-    // targetCell 在整个可滚动内容中的左边偏移量
-    const headerWidth = headerCell ? headerCell.offsetWidth : 0;
-    const targetOffsetLeft = targetCell.offsetLeft; // 相对于父元素的偏移
-    // 让目标格子左边紧贴行标题右边（即内容区最左）
-    // targetCell.offsetLeft 已包含 padding(16px)，再减去 padding 让其对齐左边缘
-    sc.scrollTo({ left: Math.max(0, targetOffsetLeft - headerWidth), behavior: 'smooth' });
+    const colWidth = 300;
+    const headerWidth = 160;
+    const targetLeft = headerWidth + colIdx * colWidth;
+    sc.scrollTo({ left: Math.max(0, targetLeft - headerWidth), behavior: 'smooth' });
+}
+
+function restoreMatrixAllCols() {
+    const sc = document.getElementById('matrix-scroll-container');
+    if (!sc) return;
+    const allRows = sc.querySelectorAll('[data-matrix-row]');
+    allRows.forEach(function(row) {
+        Array.from(row.children).forEach(function(cell) { cell.style.display = ''; });
+    });
+    const headerRow = sc.querySelector('[data-matrix-header]');
+    if (headerRow) {
+        Array.from(headerRow.children).forEach(function(cell) { cell.style.display = ''; });
+    }
 }
 
 function highlightSearchedUser(userId) {
@@ -1620,7 +1625,7 @@ function renderMatrix(filtered) {
     const container = document.getElementById('matrix-body');
     let html = '';
     MATRIX_ROWS.forEach(function(row) {
-        html += '<div class="grid grid-cols-5 border-b border-gray-300 last:border-b-0">';
+        html += '<div data-matrix-row style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 last:border-b-0">';
         html += '<div class="p-3 border-r border-gray-300 bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-sm text-center leading-snug">' + row.label + '</div>';
         MATRIX_COLS.forEach(function(col) {
             const targetCatId = getCategoryByScore(row.id, col.min);
