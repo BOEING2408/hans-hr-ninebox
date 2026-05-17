@@ -571,9 +571,10 @@
                     </h3>
                     <textarea id="modal-comments"
                         class="flex-1 w-full p-3 bg-white border border-yellow-200 rounded-lg text-sm text-gray-700 focus:ring-2 focus:ring-yellow-400 outline-none resize-none shadow-inner"
+                        oninput="autoSaveModalComments()"
                         placeholder="在此输入针对该员工的具体评语、优劣势分析及下一步培养/调整计划..."></textarea>
                     <div class="mt-2 text-xs text-gray-400 flex justify-end items-center gap-1">
-                        <i class="fa-solid fa-floppy-disk"></i> 关闭时自动保存
+                        <i class="fa-solid fa-floppy-disk"></i> 自动保存并同步到 xlsx
                     </div>
                 </div>
             </div>
@@ -870,6 +871,56 @@ async function cloudSaveUser(user) {
         console.warn('云端更新失败', e);
         localStorage.setItem('talent_users_v2', JSON.stringify(usersData));
     }
+    // 同步评语到雷达图 xlsx
+    syncCommentsToRadarXlsx(user);
+}
+// 将评语同步回 _editorData.radar 的「评语」列，并重新上传云端 xlsx
+function syncCommentsToRadarXlsx(user) {
+    const ed = _editorData.radar;
+    if (!ed || !ed.headers || ed.headers.length === 0) return;
+    // 找到「姓名」列和「评语」列的索引
+    const nameColIdx = ed.headers.findIndex(function(h) {
+        return ['姓名','名字','员工姓名','name'].some(function(a) { return h.includes(a) || a.includes(h); });
+    });
+    const commentColIdx = ed.headers.findIndex(function(h) {
+        return ['评语','备注','说明','comment','remarks'].some(function(a) { return h.includes(a) || a.includes(h); });
+    });
+    if (nameColIdx < 0 || commentColIdx < 0) return;
+    // 将该员工的评语写入所有对应行
+    // 评语格式：「【能力项】评语」，逐行拆分后按能力项匹配；若无法匹配则整体写入第一行
+    const commentLines = (user.comments || '').split('\n').filter(function(l) { return l.trim(); });
+    // 构建 能力项→评语 的映射
+    const subjectCommentMap = {};
+    commentLines.forEach(function(line) {
+        const m = line.match(/^【(.+?)】(.*)$/);
+        if (m) { subjectCommentMap[m[1].trim()] = m[2].trim(); }
+    });
+    // 找到「能力项」列索引
+    const subjectColIdx = ed.headers.findIndex(function(h) {
+        return ['能力项','评价维度','维度','能力维度','维度名称','subject'].some(function(a) { return h.includes(a) || a.includes(h); });
+    });
+    let updated = false;
+    ed.rows.forEach(function(row) {
+        if (String(row[nameColIdx]).trim() !== user.name) return;
+        if (subjectColIdx >= 0 && Object.keys(subjectCommentMap).length > 0) {
+            const subject = String(row[subjectColIdx] || '').trim();
+            if (subjectCommentMap[subject] !== undefined) {
+                row[commentColIdx] = subjectCommentMap[subject];
+                updated = true;
+            }
+        } else {
+            // 没有按能力项拆分时，将完整评语写入第一行，其余行清空
+            row[commentColIdx] = '';
+            updated = true;
+        }
+    });
+    // 若没有按能力项匹配到，将完整评语写入该员工第一行
+    if (!updated || Object.keys(subjectCommentMap).length === 0) {
+        const firstRow = ed.rows.find(function(row) { return String(row[nameColIdx]).trim() === user.name; });
+        if (firstRow) { firstRow[commentColIdx] = user.comments || ''; }
+    }
+    // 重新生成 xlsx 并上传云端
+    saveEditorAsCloudFile('radar');
 }
 
 async function cloudClearAll() {
@@ -1878,6 +1929,12 @@ function navigateModal(dir) {
     renderModalContent(currentFilteredList[currentModalIndex]);
 }
 
+function autoSaveModalComments() {
+    clearTimeout(_cloudSaveTimer);
+    _cloudSaveTimer = setTimeout(function() {
+        saveCurrentComments();
+    }, 1500);
+}
 function saveCurrentComments() {
     if (!currentEditingUserId) return;
     const idx = usersData.findIndex(function(u) { return u.id === currentEditingUserId; });
@@ -1885,7 +1942,7 @@ function saveCurrentComments() {
         const newComment = document.getElementById('modal-comments').value;
         if (usersData[idx].comments !== newComment) {
             usersData[idx].comments = newComment;
-            // 异步保存到云端
+            // 异步保存到云端并同步到 xlsx
             cloudSaveUser(usersData[idx]);
         }
     }
