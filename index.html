@@ -1709,7 +1709,9 @@ function renderMatrix(filtered) {
     let html = '';
     MATRIX_ROWS.forEach(function(row) {
         html += '<div data-matrix-row style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 last:border-b-0">';
-        html += '<div class="p-3 border-r border-gray-300 bg-gray-100 font-bold text-gray-700 text-sm text-center leading-snug sticky left-0 z-10" style="display:flex;align-items:center;justify-content:center;">' + row.label + '</div>';
+        html += '<div class="border-r border-gray-300 bg-gray-100 font-bold text-gray-700 text-sm text-center leading-snug" style="position:relative;">' +
+            '<div style="position:sticky;top:0;padding:12px 8px;display:flex;align-items:center;justify-content:center;min-height:100%;">' + row.label + '</div>' +
+            '</div>';
         MATRIX_COLS.forEach(function(col) {
             const targetCatId = getCategoryByScore(row.id, col.min);
             const catDef = TALENT_CATEGORIES[targetCatId];
