@@ -1710,8 +1710,8 @@ function switchOverallTab(tab) {
         tabPrev.classList.remove('active');
         textarea.focus();
     } else {
-        // 预览时显示完整拼接内容
-        const md = getOverallDisplayContent() || '';
+        // 预览时：单标签只显示该标签内容，全部/多标签才拼接
+        const md = (getOverallKey() === null) ? getOverallDisplayContent() : (textarea.value || '');
         preview.innerHTML = typeof marked !== 'undefined'
             ? marked.parse(md)
             : '<pre style="white-space:pre-wrap">' + md.replace(/</g,'&lt;') + '</pre>';
