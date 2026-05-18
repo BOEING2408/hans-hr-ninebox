@@ -1653,6 +1653,8 @@ function updateOverallEditor() {
     var hint = document.getElementById('overall-multi-hint');
     var scopeLabel = document.getElementById('overall-scope-label');
     var hintText = document.getElementById('overall-multi-hint-text');
+    var preview = document.getElementById('overall-preview');
+    var isPreviewMode = preview && !preview.classList.contains('hidden');
 
     // 更新标签显示
     var labelText = getOverallScopeLabel();
@@ -1660,7 +1662,8 @@ function updateOverallEditor() {
 
     if (isMulti) {
         // 多标签只读
-        textarea.value = getOverallDisplayContent();
+        var multiContent = getOverallDisplayContent();
+        textarea.value = multiContent;
         textarea.readOnly = true;
         textarea.style.background = '#f8fafc';
         textarea.style.color = '#6b7280';
@@ -1668,21 +1671,33 @@ function updateOverallEditor() {
         var fam = Array.from(activeTagFilters.jobFamily);
         var rol = Array.from(activeTagFilters.role);
         hintText.textContent = '当前显示「' + fam.concat(rol).join(' + ') + '」拼接内容（只读）。请单独选择某一标签进行编辑。';
+        if (isPreviewMode && preview) {
+            preview.innerHTML = typeof marked !== 'undefined' ? marked.parse(multiContent) : '<pre style="white-space:pre-wrap">' + multiContent.replace(/</g,'&lt;') + '</pre>';
+        }
     } else if (isAll) {
-        // 全部：显示拼接内容，但全部本身可编辑（只编辑全局部分）
-        textarea.value = _overallComments['overall_comments'] || '';
+        // 全部：只编辑全局部分
+        var allContent = _overallComments['overall_comments'] || '';
+        textarea.value = allContent;
         textarea.readOnly = false;
         textarea.style.background = '';
         textarea.style.color = '';
         hint.classList.remove('hidden');
         hintText.textContent = '当前编辑「全部」板块内容。切换到具体序列/岗位标签可编辑该板块专属内容。';
+        if (isPreviewMode && preview) {
+            var allDisplay = getOverallDisplayContent();
+            preview.innerHTML = typeof marked !== 'undefined' ? marked.parse(allDisplay) : '<pre style="white-space:pre-wrap">' + allDisplay.replace(/</g,'&lt;') + '</pre>';
+        }
     } else {
-        // 单标签：直接编辑
-        textarea.value = _overallComments[key] || '';
+        // 单标签：直接编辑，预览只显示该标签内容
+        var singleContent = _overallComments[key] || '';
+        textarea.value = singleContent;
         textarea.readOnly = false;
         textarea.style.background = '';
         textarea.style.color = '';
         hint.classList.add('hidden');
+        if (isPreviewMode && preview) {
+            preview.innerHTML = typeof marked !== 'undefined' ? marked.parse(singleContent) : '<pre style="white-space:pre-wrap">' + singleContent.replace(/</g,'&lt;') + '</pre>';
+        }
     }
 }
 
