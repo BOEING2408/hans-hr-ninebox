@@ -1709,13 +1709,13 @@ function renderMatrix(filtered) {
     let html = '';
     MATRIX_ROWS.forEach(function(row) {
         html += '<div data-matrix-row style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 last:border-b-0">';
-        html += '<div class="p-3 border-r border-gray-300 bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-sm text-center leading-snug">' + row.label + '</div>';
+        html += '<div class="p-3 border-r border-gray-300 bg-gray-100 font-bold text-gray-700 text-sm text-center leading-snug sticky left-0 z-10" style="display:flex;align-items:center;justify-content:center;">' + row.label + '</div>';
         MATRIX_COLS.forEach(function(col) {
             const targetCatId = getCategoryByScore(row.id, col.min);
             const catDef = TALENT_CATEGORIES[targetCatId];
             const cellUsers = filtered.filter(function(u) { return u.performance === row.id && u.compId === col.id; });
             const textColor = targetCatId === 'E' ? 'text-white' : 'text-gray-800';
-            html += '<div class="p-2 border-r border-gray-300 last:border-r-0 min-h-[110px] flex flex-col ' + catDef.colorClass + '">' +
+            html += '<div class="p-2 border-r border-gray-300 last:border-r-0 flex flex-col ' + catDef.colorClass + '" style="min-height:110px;overflow-y:auto;max-height:280px;">'   +
                 '<div class="text-xs font-bold mb-2 pb-1 border-b border-black/10 ' + textColor + '">' + catDef.id + '类 · ' + catDef.action.split('/')[0] + '</div>' +
                 '<div class="flex flex-wrap gap-1.5 flex-1 content-start">';
             cellUsers.forEach(function(user) {
