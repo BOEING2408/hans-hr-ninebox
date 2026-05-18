@@ -327,16 +327,18 @@
                 </div>
             </div>
             <div id="matrix-scroll-container" style="overflow-x:auto;width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;padding:16px 24px;box-sizing:border-box;">
-                <div style="width:1360px" class="border border-gray-300 rounded-lg overflow-hidden">
-                    <div data-matrix-header style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 bg-gray-100">
-                        <div class="p-3 border-r border-gray-300 flex items-center justify-center font-bold text-gray-700 text-sm" style="position:sticky;left:0;z-index:3;background:#f3f4f6;">绩效 \ 能力</div>
-                        <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">低能力<br><span class="font-normal text-xs text-gray-500">(得分&lt;60)</span></div>
-                        <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">中下能力<br><span class="font-normal text-xs text-gray-500">(60≤得分&lt;70)</span></div>
-                        <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">中上能力<br><span class="font-normal text-xs text-gray-500">(70≤得分&lt;85)</span></div>
-                        <div class="p-3 text-center font-bold text-gray-700 text-sm">高能力<br><span class="font-normal text-xs text-gray-500">(得分≥85)</span></div>
-                    </div>
-                    <div id="matrix-body"></div>
-                </div>
+                <table id="matrix-table" style="width:1360px;border-collapse:collapse;" class="border border-gray-300 rounded-lg overflow-hidden">
+                    <thead>
+                        <tr data-matrix-header class="border-b border-gray-300 bg-gray-100">
+                            <th class="p-3 border-r border-gray-300 font-bold text-gray-700 text-sm text-center" style="position:sticky;left:0;z-index:3;background:#f3f4f6;width:160px;min-width:160px;">绩效 \ 能力</th>
+                            <th class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm" style="width:300px;min-width:300px;">低能力<br><span class="font-normal text-xs text-gray-500">(得分&lt;60)</span></th>
+                            <th class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm" style="width:300px;min-width:300px;">中下能力<br><span class="font-normal text-xs text-gray-500">(60≤得分&lt;70)</span></th>
+                            <th class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm" style="width:300px;min-width:300px;">中上能力<br><span class="font-normal text-xs text-gray-500">(70≤得分&lt;85)</span></th>
+                            <th class="p-3 text-center font-bold text-gray-700 text-sm" style="width:300px;min-width:300px;">高能力<br><span class="font-normal text-xs text-gray-500">(得分≥85)</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="matrix-body"></tbody>
+                </table>
             </div>
         </div>
 
@@ -1441,14 +1443,12 @@ function applyMatrixHighlight(targetRow, targetCol) {
     clearMatrixHighlight();
     const body = document.getElementById('matrix-body');
     if (!body) return;
-    const rows = body.querySelectorAll(':scope > div');
+    const rows = body.querySelectorAll(':scope > tr');
     rows.forEach(function(rowEl, ri) {
-        // 每行第0列是行标题，数据列从第1列开始
-        const cells = rowEl.querySelectorAll(':scope > div');
+        // 每行第0列是行标题(th)，数据列从第1列(td)开始
+        const cells = rowEl.querySelectorAll(':scope > td');
         cells.forEach(function(cell, ci) {
-            if (ci === 0) return; // 跳过行标题
-            const dataColIdx = ci - 1;
-            if (ri === targetRow && dataColIdx === targetCol) {
+            if (ri === targetRow && ci === targetCol) {
                 cell.classList.add('matrix-cell-highlight');
             } else {
                 cell.classList.add('matrix-cell-blur');
@@ -1466,22 +1466,15 @@ function clearMatrixHighlight() {
 }
 
 function scrollMatrixColIntoView(colIdx) {
-    // 隐藏其他列，只保留行标题列（第0列）和目标列（colIdx+1）
-    // 矩阵使用 grid，通过控制每行子元素的 visibility 实现
     const sc = document.getElementById('matrix-scroll-container');
     if (!sc) return;
 
-    // 先恢复所有列可见
-    sc.querySelectorAll('[data-col-idx]').forEach(function(cell) {
-        cell.style.display = '';
-    });
-
-    // 获取所有矩阵行（包括 header 行和 body 行）
+    // 获取所有矩阵行（tbody 中的 tr）
     const allRows = sc.querySelectorAll('[data-matrix-row]');
     allRows.forEach(function(row) {
         const cells = row.children;
         for (var i = 0; i < cells.length; i++) {
-            // i=0 是行标题列，i=colIdx+1 是目标列
+            // i=0 是行标题列(th)，i=colIdx+1 是目标列(td)
             if (i !== 0 && i !== colIdx + 1) {
                 cells[i].style.display = 'none';
             } else {
@@ -1490,7 +1483,7 @@ function scrollMatrixColIntoView(colIdx) {
         }
     });
 
-    // 同时处理 header 行（无 data-matrix-row 属性）
+    // 同时处理 header 行
     const headerRow = sc.querySelector('[data-matrix-header]');
     if (headerRow) {
         const cells = headerRow.children;
@@ -1503,21 +1496,13 @@ function scrollMatrixColIntoView(colIdx) {
         }
     }
 
-    // 滚动到顶部
     sc.scrollTo({ left: 0, behavior: 'smooth' });
 }
 
 function restoreMatrixAllCols() {
     const sc = document.getElementById('matrix-scroll-container');
     if (!sc) return;
-    const allRows = sc.querySelectorAll('[data-matrix-row]');
-    allRows.forEach(function(row) {
-        Array.from(row.children).forEach(function(cell) { cell.style.display = ''; });
-    });
-    const headerRow = sc.querySelector('[data-matrix-header]');
-    if (headerRow) {
-        Array.from(headerRow.children).forEach(function(cell) { cell.style.display = ''; });
-    }
+    sc.querySelectorAll('th, td').forEach(function(cell) { cell.style.display = ''; });
 }
 
 function highlightSearchedUser(userId) {
@@ -1708,22 +1693,22 @@ function renderMatrix(filtered) {
     const container = document.getElementById('matrix-body');
     let html = '';
     MATRIX_ROWS.forEach(function(row) {
-        html += '<div data-matrix-row style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 last:border-b-0">';
-        html += '<div class="border-r border-gray-300 bg-gray-100 font-bold text-gray-700 text-sm text-center leading-snug" style="display:flex;align-items:center;justify-content:center;padding:12px 8px;position:sticky;left:0;z-index:2;">' + row.label + '</div>';
+        html += '<tr data-matrix-row class="border-b border-gray-300">';
+        html += '<th class="border-r border-gray-300 bg-gray-100 font-bold text-gray-700 text-sm text-center leading-snug" style="position:sticky;left:0;z-index:2;background:#f3f4f6;padding:12px 8px;vertical-align:middle;">' + row.label + '</th>';
         MATRIX_COLS.forEach(function(col) {
             const targetCatId = getCategoryByScore(row.id, col.min);
             const catDef = TALENT_CATEGORIES[targetCatId];
             const cellUsers = filtered.filter(function(u) { return u.performance === row.id && u.compId === col.id; });
             const textColor = targetCatId === 'E' ? 'text-white' : 'text-gray-800';
-            html += '<div class="p-2 border-r border-gray-300 last:border-r-0 flex flex-col ' + catDef.colorClass + '" style="min-height:110px;overflow-y:auto;max-height:280px;">'   +
+            html += '<td class="p-2 border-r border-gray-300 ' + catDef.colorClass + '" style="min-width:300px;width:300px;min-height:110px;vertical-align:top;">' +
                 '<div class="text-xs font-bold mb-2 pb-1 border-b border-black/10 ' + textColor + '">' + catDef.id + '类 · ' + catDef.action.split('/')[0] + '</div>' +
-                '<div class="flex flex-wrap gap-1.5 flex-1 content-start">';
+                '<div class="flex flex-wrap gap-1.5 content-start">';
             cellUsers.forEach(function(user) {
                 html += '<button data-uid="' + user.id + '" onclick="openModal(\'' + user.id + '\')" class="bg-white/90 hover:bg-white text-gray-800 text-xs px-2 py-1 rounded border border-black/10 shadow-sm hover:shadow transition-all cursor-pointer">' + escHtml(user.name) + '</button>';
             });
-            html += '</div></div>';
+            html += '</div></td>';
         });
-        html += '</div>';
+        html += '</tr>';
     });
     container.innerHTML = html;
 }
