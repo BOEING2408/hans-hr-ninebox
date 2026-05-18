@@ -273,15 +273,21 @@
         <!-- 整体盘点意见 -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
             <div class="flex items-center justify-between mb-3">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                     <i class="fa-solid fa-file-lines text-blue-600"></i>
                     <h3 class="font-bold text-gray-800">模块整体盘点意见及后续行动计划</h3>
+                    <span id="overall-scope-label" class="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium border border-blue-200">全部</span>
                     <span class="text-xs text-gray-400 font-normal">（支持 Markdown 格式）</span>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-gray-400">
                     <i class="fa-brands fa-markdown"></i>
                     <span>Markdown</span>
                 </div>
+            </div>
+            <!-- 多标签只读提示 -->
+            <div id="overall-multi-hint" class="hidden mb-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                <i class="fa-solid fa-circle-info"></i>
+                <span id="overall-multi-hint-text">当前显示多个板块拼接内容（只读）。请单独选择某一标签进行编辑。</span>
             </div>
             <div class="overall-editor-wrap">
                 <div class="overall-tab-bar">
@@ -753,11 +759,13 @@ async function cloudLoadAll() {
             const stateMap = {};
             stateRows.forEach(function(r) { stateMap[r.key] = r.value; });
 
-            // 整体评语
-            if (stateMap['overall_comments']) {
-                const oc = document.getElementById('overall-editor-textarea');
-                if (oc) oc.value = stateMap['overall_comments'];
-            }
+            // 整体盘点意见：加载所有 overall_comments 开头的 key
+            Object.keys(stateMap).forEach(function(k) {
+                if (k.startsWith('overall_comments')) {
+                    _overallComments[k] = stateMap[k];
+                }
+            });
+            updateOverallEditor();
             // 恢复人员基础表文件
             if (stateMap['file_personnel_b64']) {
                 _fileBase64.personnel = stateMap['file_personnel_b64'];
@@ -1557,11 +1565,135 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// ─── 整体盘点意见：按标签独立存储 ────────────────────────────────
+// _overallComments: { 'overall_comments': '...', 'overall_comments__序列名': '...', ... }
+var _overallComments = {};
+
+// 获取当前筛选状态对应的存储 key（单标签时可编辑，多标签/全部时只读拼接）
+function getOverallKey() {
+    var fam = Array.from(activeTagFilters.jobFamily);
+    var rol = Array.from(activeTagFilters.role);
+    var total = fam.length + rol.length;
+    if (total === 0) return 'overall_comments'; // 全部
+    if (total === 1) {
+        if (fam.length === 1) return 'overall_comments__fam__' + fam[0];
+        return 'overall_comments__role__' + rol[0];
+    }
+    return null; // 多标签：只读拼接
+}
+
+// 获取当前筛选状态的显示标签名
+function getOverallScopeLabel() {
+    var fam = Array.from(activeTagFilters.jobFamily);
+    var rol = Array.from(activeTagFilters.role);
+    var total = fam.length + rol.length;
+    if (total === 0) return '全部';
+    var parts = fam.concat(rol);
+    return parts.join(' + ');
+}
+
+// 获取当前状态下编辑器应显示的内容
+function getOverallDisplayContent() {
+    var fam = Array.from(activeTagFilters.jobFamily);
+    var rol = Array.from(activeTagFilters.role);
+    var total = fam.length + rol.length;
+
+    if (total === 0) {
+        // 全部：先显示「全部」的内容，再拼接各板块有内容的部分
+        var globalContent = _overallComments['overall_comments'] || '';
+        var sections = [];
+        // 收集所有有内容的板块（序列和岗位）
+        Object.keys(_overallComments).forEach(function(k) {
+            if (k === 'overall_comments') return;
+            var val = (_overallComments[k] || '').trim();
+            if (!val) return;
+            var label = '';
+            if (k.startsWith('overall_comments__fam__')) label = k.replace('overall_comments__fam__', '');
+            else if (k.startsWith('overall_comments__role__')) label = k.replace('overall_comments__role__', '');
+            if (label) sections.push({ label: label, content: val });
+        });
+        if (sections.length === 0) return globalContent;
+        var parts = [];
+        if (globalContent.trim()) parts.push(globalContent.trim());
+        sections.forEach(function(s) {
+            parts.push('## ' + s.label + '\n\n' + s.content);
+        });
+        return parts.join('\n\n---\n\n');
+    }
+
+    if (total === 1) {
+        // 单标签：直接返回该标签的内容（可编辑）
+        var key = getOverallKey();
+        return _overallComments[key] || '';
+    }
+
+    // 多标签：拼接所有选中标签的内容
+    var parts = [];
+    fam.forEach(function(f) {
+        var k = 'overall_comments__fam__' + f;
+        var val = (_overallComments[k] || '').trim();
+        if (val) parts.push('## ' + f + '\n\n' + val);
+        else parts.push('## ' + f + '\n\n（暂无内容）');
+    });
+    rol.forEach(function(r) {
+        var k = 'overall_comments__role__' + r;
+        var val = (_overallComments[k] || '').trim();
+        if (val) parts.push('## ' + r + '\n\n' + val);
+        else parts.push('## ' + r + '\n\n（暂无内容）');
+    });
+    return parts.join('\n\n---\n\n');
+}
+
+// 更新编辑器显示
+function updateOverallEditor() {
+    var key = getOverallKey();
+    var isMulti = (key === null);
+    var isAll = (key === 'overall_comments');
+    var textarea = document.getElementById('overall-editor-textarea');
+    var hint = document.getElementById('overall-multi-hint');
+    var scopeLabel = document.getElementById('overall-scope-label');
+    var hintText = document.getElementById('overall-multi-hint-text');
+
+    // 更新标签显示
+    var labelText = getOverallScopeLabel();
+    if (scopeLabel) scopeLabel.textContent = labelText;
+
+    if (isMulti) {
+        // 多标签只读
+        textarea.value = getOverallDisplayContent();
+        textarea.readOnly = true;
+        textarea.style.background = '#f8fafc';
+        textarea.style.color = '#6b7280';
+        hint.classList.remove('hidden');
+        var fam = Array.from(activeTagFilters.jobFamily);
+        var rol = Array.from(activeTagFilters.role);
+        hintText.textContent = '当前显示「' + fam.concat(rol).join(' + ') + '」拼接内容（只读）。请单独选择某一标签进行编辑。';
+    } else if (isAll) {
+        // 全部：显示拼接内容，但全部本身可编辑（只编辑全局部分）
+        textarea.value = _overallComments['overall_comments'] || '';
+        textarea.readOnly = false;
+        textarea.style.background = '';
+        textarea.style.color = '';
+        hint.classList.remove('hidden');
+        hintText.textContent = '当前编辑「全部」板块内容。切换到具体序列/岗位标签可编辑该板块专属内容。';
+    } else {
+        // 单标签：直接编辑
+        textarea.value = _overallComments[key] || '';
+        textarea.readOnly = false;
+        textarea.style.background = '';
+        textarea.style.color = '';
+        hint.classList.add('hidden');
+    }
+}
+
 function saveOverallComments() {
+    var key = getOverallKey();
+    if (key === null) return; // 多标签只读，不保存
+    var val = document.getElementById('overall-editor-textarea').value;
+    _overallComments[key] = val;
     clearTimeout(_cloudSaveTimer);
     _cloudSaveTimer = setTimeout(function() {
-        const val = document.getElementById('overall-editor-textarea').value;
-        cloudSaveState('overall_comments', val);
+        cloudSaveState(key, val);
     }, 1500);
 }
 
@@ -1578,7 +1710,8 @@ function switchOverallTab(tab) {
         tabPrev.classList.remove('active');
         textarea.focus();
     } else {
-        const md = textarea.value || '';
+        // 预览时显示完整拼接内容
+        const md = getOverallDisplayContent() || '';
         preview.innerHTML = typeof marked !== 'undefined'
             ? marked.parse(md)
             : '<pre style="white-space:pre-wrap">' + md.replace(/</g,'&lt;') + '</pre>';
@@ -1628,13 +1761,14 @@ function toggleTagFilter(type, value) {
     }
     buildTagFilters();
     renderAll();
+    updateOverallEditor();
 }
-
 function resetTagFilters() {
     activeTagFilters.jobFamily.clear();
     activeTagFilters.role.clear();
     buildTagFilters();
     renderAll();
+    updateOverallEditor();
 }
 
 function getFilteredUsers() {
