@@ -329,7 +329,7 @@
             <div id="matrix-scroll-container" style="overflow-x:auto;width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;padding:16px 24px;box-sizing:border-box;">
                 <div style="width:1360px" class="border border-gray-300 rounded-lg overflow-hidden">
                     <div data-matrix-header style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 bg-gray-100">
-                        <div class="p-3 border-r border-gray-300 flex items-center justify-center font-bold text-gray-700 text-sm">绩效 \ 能力</div>
+                        <div class="p-3 border-r border-gray-300 flex items-center justify-center font-bold text-gray-700 text-sm" style="position:sticky;left:0;z-index:3;background:#f3f4f6;">绩效 \ 能力</div>
                         <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">低能力<br><span class="font-normal text-xs text-gray-500">(得分&lt;60)</span></div>
                         <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">中下能力<br><span class="font-normal text-xs text-gray-500">(60≤得分&lt;70)</span></div>
                         <div class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm">中上能力<br><span class="font-normal text-xs text-gray-500">(70≤得分&lt;85)</span></div>
@@ -1709,7 +1709,7 @@ function renderMatrix(filtered) {
     let html = '';
     MATRIX_ROWS.forEach(function(row) {
         html += '<div data-matrix-row style="display:grid;grid-template-columns:160px repeat(4,300px)" class="border-b border-gray-300 last:border-b-0">';
-        html += '<div class="border-r border-gray-300 bg-gray-100 font-bold text-gray-700 text-sm text-center leading-snug" style="display:flex;align-items:center;justify-content:center;padding:12px 8px;">' + row.label + '</div>';
+        html += '<div class="border-r border-gray-300 bg-gray-100 font-bold text-gray-700 text-sm text-center leading-snug" style="display:flex;align-items:center;justify-content:center;padding:12px 8px;position:sticky;left:0;z-index:2;">' + row.label + '</div>';
         MATRIX_COLS.forEach(function(col) {
             const targetCatId = getCategoryByScore(row.id, col.min);
             const catDef = TALENT_CATEGORIES[targetCatId];
