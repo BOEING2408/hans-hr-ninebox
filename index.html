@@ -326,15 +326,15 @@
                     <div id="matrix-search-results" class="hidden"></div>
                 </div>
             </div>
-            <div id="matrix-scroll-container" style="overflow-x:auto;width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;padding:16px 24px;box-sizing:border-box;">
-                <table id="matrix-table" style="width:1360px;border-collapse:collapse;" class="border border-gray-300 rounded-lg overflow-hidden">
+            <div id="matrix-scroll-container" style="overflow-x:auto;width:100%;padding:4px 0;box-sizing:border-box;">
+                <table id="matrix-table" style="width:100%;min-width:900px;border-collapse:collapse;table-layout:fixed;" class="border border-gray-300 rounded-lg overflow-hidden">
                     <thead>
                         <tr data-matrix-header class="border-b border-gray-300 bg-gray-100">
-                            <th class="p-3 border-r border-gray-300 font-bold text-gray-700 text-sm text-center" style="position:sticky;left:0;z-index:3;background:#f3f4f6;width:160px;min-width:160px;">绩效 \ 能力</th>
-                            <th class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm" style="width:300px;min-width:300px;">低能力<br><span class="font-normal text-xs text-gray-500">(得分&lt;60)</span></th>
-                            <th class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm" style="width:300px;min-width:300px;">中下能力<br><span class="font-normal text-xs text-gray-500">(60≤得分&lt;70)</span></th>
-                            <th class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm" style="width:300px;min-width:300px;">中上能力<br><span class="font-normal text-xs text-gray-500">(70≤得分&lt;85)</span></th>
-                            <th class="p-3 text-center font-bold text-gray-700 text-sm" style="width:300px;min-width:300px;">高能力<br><span class="font-normal text-xs text-gray-500">(得分≥85)</span></th>
+                            <th class="p-3 border-r border-gray-300 font-bold text-gray-700 text-sm text-center" style="background:#f3f4f6;width:12%;min-width:120px;">绩效 \ 能力</th>
+                            <th class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm" style="width:22%;">低能力<br><span class="font-normal text-xs text-gray-500">(得分&lt;60)</span></th>
+                            <th class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm" style="width:22%;">中下能力<br><span class="font-normal text-xs text-gray-500">(60≤得分&lt;70)</span></th>
+                            <th class="p-3 border-r border-gray-300 text-center font-bold text-gray-700 text-sm" style="width:22%;">中上能力<br><span class="font-normal text-xs text-gray-500">(70≤得分&lt;85)</span></th>
+                            <th class="p-3 text-center font-bold text-gray-700 text-sm" style="width:22%;">高能力<br><span class="font-normal text-xs text-gray-500">(得分≥85)</span></th>
                         </tr>
                     </thead>
                     <tbody id="matrix-body"></tbody>
@@ -1694,7 +1694,7 @@ function renderMatrix(filtered) {
     let html = '';
     MATRIX_ROWS.forEach(function(row) {
         html += '<tr data-matrix-row class="border-b border-gray-300">';
-        html += '<th class="border-r border-gray-300 bg-gray-100 font-bold text-gray-700 text-sm text-center leading-snug" style="position:sticky;left:0;z-index:2;background:#f3f4f6;padding:12px 8px;vertical-align:middle;">' + row.label + '</th>';
+        html += '<th class="border-r border-gray-300 bg-gray-100 font-bold text-gray-700 text-sm text-center leading-snug" style="background:#f3f4f6;padding:12px 8px;vertical-align:middle;width:12%;min-width:120px;">' + row.label + '</th>';
         MATRIX_COLS.forEach(function(col) {
             const targetCatId = getCategoryByScore(row.id, col.min);
             const catDef = TALENT_CATEGORIES[targetCatId];
